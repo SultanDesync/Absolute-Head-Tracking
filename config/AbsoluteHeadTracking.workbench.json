@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "absolute.head_tracking",
+  "displayName": "Absolute Head Tracking",
+  "backendDll": "AbsoluteHeadTracking.dll",
+  "queryExport": "AbsoluteHeadTracking_QueryApi",
+  "backendApiVersion": 1,
+  "requiredHost": {
+    "moduleId": "absolute.workbench",
+    "minimumApiVersion": 1,
+    "required": false
+  },
+  "pages": [
+    {
+      "id": "head-tracking",
+      "title": "Head Tracking",
+      "category": "Camera",
+      "order": 10
+    },
+    {
+      "id": "head-tracking-bindings",
+      "title": "Head Tracking Bindings",
+      "category": "Camera",
+      "order": 20
+    },
+    {
+      "id": "head-tracking-diagnostics",
+      "title": "Head Tracking Diagnostics",
+      "category": "Diagnostics",
+      "order": 810
+    }
+  ]
+}

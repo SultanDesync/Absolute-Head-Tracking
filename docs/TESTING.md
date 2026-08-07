@@ -52,6 +52,18 @@ the new DLL still needs integration coverage:
 - Simulated renderer failure must close only the workbench; head tracking and
   manual INI configuration must continue.
 
+## Shared Workbench integration
+
+- Load AHT before and after Absolute Workbench; the positive handshake must
+  select exactly one renderer in either order.
+- Exercise host modes Active, Suppressed, Incompatible, and Unavailable.
+- Verify the legacy menu chord opens `absolute.head_tracking/head-tracking` when
+  hosted and never opens the local renderer.
+- Capture each binding in the shared frontend and confirm no daughter action
+  fires during capture.
+- Save from Workbench and require apply, INI write, reload, and read-back match
+  before the draft becomes clean. Force a write failure and keep it dirty.
+
 ## Configuration
 
 - Save from the workbench, restart, and confirm every setting round-trips.

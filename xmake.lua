@@ -1,5 +1,5 @@
 set_project("AbsoluteHeadTracking")
-set_version("0.1.0")
+set_version("0.2.0")
 set_languages("c++23")
 set_warnings("all")
 
@@ -24,9 +24,10 @@ target("AbsoluteHeadTracking")
     add_includedirs("include")
     add_files("src/**.cpp")
     set_pcxxheader("include/PCH.h")
+    add_defines("ABSOLUTE_HEAD_TRACKING_EXPORTS")
     add_defines(
         "PLUGIN_VERSION_MAJOR=0",
-        "PLUGIN_VERSION_MINOR=1",
+        "PLUGIN_VERSION_MINOR=2",
         "PLUGIN_VERSION_PATCH=0",
         "PLUGIN_VERSION_PRERELEASE=alpha"
     )
@@ -38,10 +39,12 @@ target("AbsoluteHeadTracking")
         local stage = path.join(os.projectdir(), "contrib", layout, "Data", "SFSE", "Plugins")
         local dllsrc = target:targetfile()
         local inisrc = path.join(os.projectdir(), "config", "AbsoluteHeadTracking.ini")
+        local manifestsrc = path.join(os.projectdir(), "config", "AbsoluteHeadTracking.workbench.json")
         os.mkdir(stage)
         os.cp(dllsrc, path.join(stage, "AbsoluteHeadTracking.dll"))
         os.cp(inisrc, path.join(stage, "AbsoluteHeadTracking.ini"))
-        print("Staged AbsoluteHeadTracking.dll + .ini -> " .. stage)
+        os.cp(manifestsrc, path.join(stage, "AbsoluteHeadTracking.workbench.json"))
+        print("Staged AbsoluteHeadTracking DLL, INI, and Workbench manifest -> " .. stage)
 
         local destination = config.get("deploydir")
         if not destination or destination == "" then
@@ -51,7 +54,8 @@ target("AbsoluteHeadTracking")
             os.mkdir(destination)
             os.cp(dllsrc, path.join(destination, "AbsoluteHeadTracking.dll"))
             os.cp(inisrc, path.join(destination, "AbsoluteHeadTracking.ini"))
-            print("Deployed AbsoluteHeadTracking.dll + .ini -> " .. destination)
+            os.cp(manifestsrc, path.join(destination, "AbsoluteHeadTracking.workbench.json"))
+            print("Deployed AbsoluteHeadTracking DLL, INI, and Workbench manifest -> " .. destination)
         end
     end)
 
@@ -75,3 +79,18 @@ target("camera_policy_test")
     add_tests("cockpit_freshness")
     add_includedirs("include")
     add_files("tests/camera_policy_test.cpp")
+
+
+target("suite_api_test")
+    set_kind("binary")
+    set_default(false)
+    add_tests("pod_api_layout")
+    add_includedirs("include")
+    add_files("tests/suite_api_test.cpp")
+
+target("host_selection_test")
+    set_kind("binary")
+    set_default(false)
+    add_tests("cooperative_renderer_policy")
+    add_includedirs("include")
+    add_files("tests/host_selection_test.cpp")

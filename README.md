@@ -1,11 +1,12 @@
 # Absolute Head Tracking
 
-Absolute Head Tracking is a standalone SFSE plugin that brings Absolute's
+Absolute Head Tracking is an independent SFSE plugin that brings Absolute's
 OpenTrack-compatible rotational cockpit camera look to Starfield without the
 HOTAS/HOSAS input stack, profiles, macros, or multi-file configuration system.
 
-This repository is an initial `0.1.0-alpha` bootstrap based on the validated
-camera and FreeTrack work in AbsoluteHOTAS 5.0.1.
+Version `0.2.0-alpha` adds the versioned POD configuration API and manifest used
+by Absolute Workbench. The gameplay DLL remains authoritative and continues to
+work without the optional shared frontend.
 
 ## Compatibility contract
 
@@ -27,21 +28,31 @@ camera and FreeTrack work in AbsoluteHOTAS 5.0.1.
   and runtime toggle.
 - Cockpit-only fail-closed camera injection through the validated
   `FirstPersonState` quaternion seam.
-- A compact Absolute-branded Dear ImGui tuning workbench.
-- In-workbench hotkey capture for the menu, tracking activation toggle, and
+- A compact standalone Dear ImGui tuning window when Absolute Workbench is not
+  installed.
+- A versioned C-compatible API and `AbsoluteHeadTracking.workbench.json`
+  manifest. Absolute Workbench can edit, save, reload, and verify this plugin's
+  configuration without sharing C++ objects or runtime ownership.
+- Hotkey capture for the menu, tracking activation toggle, and
   recenter action, supporting single keys and Ctrl/Alt/Shift chords.
 - One easy-to-recreate configuration file: `AbsoluteHeadTracking.ini`.
 
 ## Default controls
 
-- `Ctrl+Alt+H` — open or close the workbench.
+- `Ctrl+Alt+H` — open the Head Tracking page in Absolute Workbench, or toggle
+  the standalone tuning window when Workbench is absent.
 - `Ctrl+Alt+C` — recenter the current OpenTrack pose.
 - `Ctrl+Alt+T` — toggle camera look at runtime.
 
-The hotkeys can be changed in the workbench or the INI.
-Open the workbench's **Bindings** section, click the displayed binding, then
+The hotkeys can be changed in Absolute Workbench, the standalone tuning window,
+or the INI. Click a displayed binding, then
 press a single key or a chord such as `Ctrl+1`. Escape cancels capture and
 Backspace clears a binding.
+
+Renderer selection is deferred until all SFSE plugins have loaded. A compatible
+active Absolute Workbench owns the single suite overlay; a suppressed or
+incompatible host does not cause AHT to install a competing renderer. AHT uses
+its standalone renderer only when the host DLL is genuinely unavailable.
 
 ## OpenTrack setup
 

@@ -5,8 +5,7 @@
 #include "Config.h"
 #include "HeadMath.h"
 #include "RuntimePaths.h"
-#include "UIHook.h"
-#include "Workbench.h"
+#include "WorkbenchHost.h"
 
 namespace {
 std::atomic<bool> g_running{ false };
@@ -63,9 +62,9 @@ void PollLoop() {
         const bool workbenchDown = HotkeyDown(config.workbench);
         const bool recenterDown = HotkeyDown(config.recenter);
         const bool toggleDown = HotkeyDown(config.toggle);
-        if (!Workbench::IsCapturingHotkey()) {
-            if (workbenchDown && !previousWorkbench && config.enableWorkbench &&
-                UIHook::IsAvailable()) UIHook::Toggle();
+        if (!WorkbenchHost::IsInputCaptureActive()) {
+            if (workbenchDown && !previousWorkbench)
+                WorkbenchHost::HandleLegacyMenuShortcut();
             if (recenterDown && !previousRecenter) g_recenterRequested.store(true);
             if (toggleDown && !previousToggle) HeadTracking::ToggleRuntime();
         }

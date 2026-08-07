@@ -12,8 +12,10 @@ The plugin is intentionally divided into five narrow services:
    observer used as a fresh cockpit signal, and the first-person camera rotation
    post-composition hook.
 4. `Configuration` owns one synchronized `Config` value and one INI file.
-5. `UIHook` and `Workbench` own rendering and tuning. Renderer failure cannot
-   disable manual INI configuration or alter the native camera.
+5. `SuiteApi` exposes copied POD snapshots and commands. `WorkbenchHost`
+   chooses either the optional suite host or the local `UIHook`/`Workbench`
+   renderer. Renderer failure cannot disable manual INI configuration or alter
+   the native camera.
 
 ## Camera safety gate
 
@@ -41,3 +43,26 @@ including cooperative chaining behind existing detours, Present and Present1,
 creation-time swap-chain/queue association, ExecuteCommandLists fallback,
 ResizeBuffers handling, frame fences, WndProc restoration, and fail-latched
 teardown for bad renderer combinations.
+
+## Optional Absolute Workbench host
+
+`AbsoluteHeadTracking.workbench.json` is declarative discovery metadata. The
+actual boundary is `AbsoluteHeadTracking_QueryApi(1)`, which returns a
+size-versioned table of C-callable functions and trivially copyable structures.
+Workbench never receives a pointer to `Config`, a mutex, or another daughter C++
+object. Apply, save, reload, recenter, and runtime-enable requests remain inside
+this DLL.
+
+Renderer ownership is selected from the positive
+`AbsoluteWorkbench_QueryHostApi(1)` handshake at SFSE `kPostPostLoad`:
+
+- `Active`: Workbench owns renderer and suite menu input.
+- `Suppressed`: graphics are intentionally disabled; AHT remains headless.
+- `Incompatible`: a host DLL exists but cannot provide the agreed ABI; AHT
+  remains headless to prevent a second overlay from racing it.
+- `Unavailable`: the host DLL is absent; AHT may install its standalone renderer
+  when enabled in its INI.
+
+While Workbench is open or capturing a binding, AHT suppresses its local hotkey
+edges. The legacy `Ctrl+Alt+H` action routes to the Head Tracking page when the
+host is active.
