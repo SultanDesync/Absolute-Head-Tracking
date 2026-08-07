@@ -8,6 +8,17 @@ Version `0.2.0-alpha` adds the versioned POD configuration API and manifest used
 by Absolute Workbench. The gameplay DLL remains authoritative and continues to
 work without the optional shared frontend.
 
+## Absolute suite
+
+- [Absolute Workbench](https://github.com/SultanDesync/Absolute-Workbench) — optional
+  shared configuration UI for this plugin and the other daughter mods.
+- [AbsoluteHOTAS](https://github.com/SultanDesync/AbsoluteHOTAS) — complete HOTAS/HOSAS
+  flight-control stack with its own integrated head-tracking implementation.
+- [AbsoluteZero Ship Control](https://github.com/SultanDesync/AbsoluteZero-Ship-Control) —
+  lightweight mouse-alignment assistance that is compatible with this plugin.
+- **Absolute Power** — priority-based ship-power presets and automation; its public
+  repository is forthcoming.
+
 ## Compatibility contract
 
 - **Compatible with AbsoluteZero Ship Control.** AbsoluteZero owns the flight
