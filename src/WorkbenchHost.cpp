@@ -3,6 +3,7 @@
 #include "WorkbenchHost.h"
 
 #include "AbsoluteWorkbenchAPI.h"
+#include "ControlPanelSubscriber.h"
 #include "RuntimePaths.h"
 #include "SuiteState.h"
 #include "UIHook.h"
@@ -101,6 +102,9 @@ bool ShouldInstallStandaloneRenderer(bool standaloneEnabled) noexcept {
 }
 
 bool IsInputCaptureActive() noexcept {
+    if (ControlPanelSubscriber::IsInputCaptureActive()) {
+        return true;
+    }
     if (SuiteState::InputCaptureActive()) {
         return true;
     }

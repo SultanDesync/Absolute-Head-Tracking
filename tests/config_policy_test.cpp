@@ -9,6 +9,7 @@
     std::exit(1); } } while (false)
 
 int main() {
+    CHECK(ConfigPolicy::Defaults().pitch.inverted);
     Config config;
     config.pollRateHz = 1;
     config.staleMilliseconds = 99999;

@@ -4,9 +4,31 @@ Absolute Head Tracking is an independent SFSE plugin that brings Absolute's
 OpenTrack-compatible rotational cockpit camera look to Starfield without the
 HOTAS/HOSAS input stack, profiles, macros, or multi-file configuration system.
 
-Version `0.2.0-alpha` adds the versioned POD configuration API and manifest used
-by Absolute Workbench. The gameplay DLL remains authoritative and continues to
-work without the optional shared frontend.
+Version `0.2.0-alpha` adds optional shared configuration frontends. The gameplay
+DLL remains authoritative and continues to work without either frontend.
+
+## Absolute Control Panel integration (experimental)
+
+This branch can register three native-menu pages with Absolute Control Panel:
+
+- **General** — runtime, polling, response, diagnostics, and recenter controls;
+- **Axes** — the complete scrollable yaw, pitch, and roll configuration surface; and
+- **Bindings** — the legacy menu shortcut, tracking toggle, and recenter chords.
+
+The adapter dynamically discovers the already-loaded host after SFSE finishes loading plugins.
+It does not link against Absolute Control Panel, transfer configuration ownership, or make the
+host a gameplay requirement. Draft changes use the existing live configuration path, Apply uses
+the existing save path, and Cancel restores the pre-edit snapshot. Host-owned binding capture
+records single keyboard keys and Ctrl/Alt/Shift chords into the existing INI representation.
+
+Frontend selection remains deliberately fail-optional during this experimental period:
+
+1. use Absolute Control Panel when its compatible host accepts registration;
+2. otherwise retain the existing Absolute Workbench integration; and
+3. otherwise retain the standalone Dear ImGui tuning window when enabled.
+
+The Control Panel is opened through its own PauseMenu entry or fallback hotkey. The existing
+`Ctrl+Alt+H` binding remains the legacy Workbench/standalone shortcut.
 
 ## Absolute suite
 
@@ -39,8 +61,7 @@ work without the optional shared frontend.
   and runtime toggle.
 - Cockpit-only fail-closed camera injection through the validated
   `FirstPersonState` quaternion seam.
-- A compact standalone Dear ImGui tuning window when Absolute Workbench is not
-  installed.
+- A compact standalone Dear ImGui tuning window when neither shared frontend is active.
 - A versioned C-compatible API and `AbsoluteHeadTracking.workbench.json`
   manifest. Absolute Workbench can edit, save, reload, and verify this plugin's
   configuration without sharing C++ objects or runtime ownership.
@@ -50,20 +71,20 @@ work without the optional shared frontend.
 
 ## Default controls
 
-- `Ctrl+Alt+H` — open the Head Tracking page in Absolute Workbench, or toggle
-  the standalone tuning window when Workbench is absent.
+- `Ctrl+Alt+H` — open the Head Tracking page in legacy Absolute Workbench, or toggle
+  the standalone tuning window when no legacy host is active.
 - `Ctrl+Alt+C` — recenter the current OpenTrack pose.
 - `Ctrl+Alt+T` — toggle camera look at runtime.
 
-The hotkeys can be changed in Absolute Workbench, the standalone tuning window,
-or the INI. Click a displayed binding, then
+The hotkeys can be changed in Absolute Control Panel, Absolute Workbench, the standalone tuning
+window, or the INI. Click a displayed binding, then
 press a single key or a chord such as `Ctrl+1`. Escape cancels capture and
 Backspace clears a binding.
 
-Renderer selection is deferred until all SFSE plugins have loaded. A compatible
-active Absolute Workbench owns the single suite overlay; a suppressed or
-incompatible host does not cause AHT to install a competing renderer. AHT uses
-its standalone renderer only when the host DLL is genuinely unavailable.
+Renderer selection is deferred until all SFSE plugins have loaded. A compatible Absolute Control
+Panel takes precedence without installing an overlay. If it is absent or incompatible, the
+existing Workbench/standalone arbitration runs unchanged. A suppressed or incompatible shared
+host never prevents the gameplay plugin from loading.
 
 ## OpenTrack setup
 

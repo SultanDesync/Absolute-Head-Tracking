@@ -25,7 +25,8 @@ struct Config {
     float deadzoneDegrees = 0.0F;
     float smoothing = 0.15F;
     AxisSettings yaw{ true, false, 1.0F, 85.0F };
-    AxisSettings pitch{ true, false, 1.0F, 60.0F };
+    // FreeTrack/OpenTrack pitch uses the opposite sign from Starfield's camera pitch.
+    AxisSettings pitch{ true, true, 1.0F, 60.0F };
     AxisSettings roll{ true, false, 1.0F, 45.0F };
     HotkeySettings workbench{ 0x48, true, true, false };
     HotkeySettings recenter{ 0x43, true, true, false };

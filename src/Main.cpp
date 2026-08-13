@@ -2,6 +2,7 @@
 
 #include "CameraHook.h"
 #include "Config.h"
+#include "ControlPanelSubscriber.h"
 #include "HeadTracking.h"
 #include "Plugin.h"
 #include "RuntimePaths.h"
@@ -27,6 +28,18 @@ void SelectUiOwnership() {
         return;
     }
     const Config config = Configuration::Get();
+    const auto panelResult = ControlPanelSubscriber::RegisterDiscoveredHost();
+    if (panelResult == AbsoluteControlPanelApi::Result::Ok ||
+        panelResult == AbsoluteControlPanelApi::Result::Duplicate) {
+        RuntimePaths::Log("[Main]",
+            "Absolute Control Panel selected as configuration renderer.", true);
+        return;
+    }
+    if (panelResult != AbsoluteControlPanelApi::Result::NotFound) {
+        RuntimePaths::Log("[Main]",
+            "Absolute Control Panel was present but rejected registration; standalone UI "
+            "selection continues.", true);
+    }
     const auto selection = WorkbenchHost::Select();
     if (!WorkbenchHost::ShouldInstallStandaloneRenderer(config.enableWorkbench)) {
         return;
