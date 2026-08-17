@@ -4,6 +4,7 @@
 
 #include "BindingCodec.h"
 #include "Config.h"
+#include "ControlPanelDiscovery.h"
 #include "HeadTracking.h"
 #include "RuntimePaths.h"
 
@@ -260,9 +261,8 @@ namespace ControlPanelSubscriber {
 AbsoluteControlPanelApi::Result RegisterDiscoveredHost() noexcept {
     using AbsoluteControlPanelApi::Result;
     try {
-        for (const wchar_t* moduleName : {
-                 L"AbsoluteControlPanel.dll", L"AbsoluteControlPanelResearch.dll"}) {
-            const auto module = GetModuleHandleW(moduleName);
+        for (const auto moduleName : ControlPanelSubscriber::Discovery::kHostModuleNames) {
+            const auto module = GetModuleHandleW(moduleName.data());
             if (!module) continue;
             const auto address = GetProcAddress(module, "AbsoluteControlPanel_QueryApi");
             if (!address) return Result::NotFound;

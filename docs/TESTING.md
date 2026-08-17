@@ -4,6 +4,38 @@ The bootstrap compiles and its pure policy/math tests pass, but native hooks and
 the OpenTrack-to-camera result still require in-game validation before the alpha
 should be called a release candidate.
 
+## Qualified Control Panel checkpoint — 2026-08-17
+
+The current `AbsoluteControlPanelResearchDev.dll` and Absolute Head Tracking integration
+passed an in-game configuration smoke test on Starfield 1.16.244:
+
+- the existing PauseMenu entry opened Absolute Control and Head Tracking populated its
+  General, Axes, and Bindings pages;
+- toggles, integer sliders, float sliders, the recenter action, and binding values rendered;
+- changed values became dirty and Apply/save persisted them;
+- Cancel/Discard restored the provider snapshot;
+- the host stale-setting decision path completed correctly; and
+- Head Tracking gameplay remained functional while the shared menu owned configuration UI.
+
+This qualifies the shared-menu configuration slice and the repaired ResearchDev discovery/data-
+load registration path. It does not replace the remaining camera, OpenTrack transport, renderer,
+or compatibility matrix below.
+
+## Qualified full-suite menu and camera-ownership checkpoint — 2026-08-17
+
+The camera-ownership build passed its supervised combined-suite smoke test. Absolute Control
+enumerated the full installed suite in one menu, and Absolute Head Tracking coexisted with the
+current AbsoluteHOTAS runtime through the ownership ABI. This qualifies daughter-module discovery,
+shared-menu rendering, and the Head Tracking/HOTAS camera boundary.
+
+Known product gaps remain explicit:
+
+- Head Tracking actions cannot yet be captured from joystick/flight controls through Absolute
+  Control.
+- Absolute Power actions likewise cannot yet be bound to joystick controls.
+- The current AbsoluteHOTAS pages are a proof of concept/technical demonstration, not the completed
+  HOTAS configuration experience.
+
 ## Baseline matrix
 
 Run each scenario on Starfield 1.16.242 and 1.16.244 where practical.
@@ -12,8 +44,11 @@ Run each scenario on Starfield 1.16.242 and 1.16.244 where practical.
 2. Absolute Head Tracking plus AbsoluteZero Ship Control, with both plugin load
    orders observed in the SFSE log. Confirm mouse alignment and camera look work
    simultaneously and neither hook reports an exact-gate failure.
-3. AbsoluteHOTAS installed beside the plugin. Confirm Absolute Head Tracking
-   logs its compatibility refusal and installs neither native nor renderer hooks.
+3. AbsoluteHOTAS installed beside the plugin. Exercise both apparent DLL load
+   orders and confirm Head Tracking owns the camera hook, HOTAS parks its legacy
+   tracker/camera hook, and HOTAS retains the selected-flight observer. Confirm
+   tracking and HOTAS flight injection both work in the same cockpit session.
+   Repeat with AbsoluteZero installed and confirm all three ownership lanes work.
 4. OpenTrack started before Starfield, after entering the main menu, and after
    entering the pilot seat.
 
@@ -34,6 +69,19 @@ Run each scenario on Starfield 1.16.242 and 1.16.244 where practical.
   never applied. Repeat through menus, loading screens, photo mode, and dialogue.
 - Re-enter the pilot seat and confirm the cockpit signal reopens automatically.
 
+## AbsoluteHOTAS camera ownership
+
+- In HOTAS diagnostics, confirm suite coordination reports Absolute Head
+  Tracking as camera owner.
+- In the Head Tracking suite API/UI, confirm both Camera hook and Cockpit
+  observer report ready; the observer is borrowed from HOTAS in this mode.
+- Confirm the HOTAS log reports that its legacy tracker is parked and its
+  FirstPersonState hook is skipped or released.
+- Confirm the Head Tracking log reports a successful camera-ownership ABI
+  connection before installing its FirstPersonState hook.
+- With an older/incompatible HOTAS DLL, confirm Head Tracking installs no native
+  hook and reports inactive/fail-closed rather than racing the camera slot.
+
 ## Workbench renderer
 
 The renderer itself comes from the validated AbsoluteHOTAS implementation, but
@@ -53,6 +101,10 @@ the new DLL still needs integration coverage:
   manual INI configuration must continue.
 
 ## Shared Workbench integration
+
+- With `AbsoluteControlPanelResearchDev.dll`, confirm AHT registers at data-load and populates
+  General, Axes, and Bindings. Exercise a forced `NotReady` first attempt and confirm the one
+  post-post-data-load retry succeeds without installing the standalone renderer.
 
 - Load AHT before and after Absolute Workbench; the positive handshake must
   select exactly one renderer in either order.

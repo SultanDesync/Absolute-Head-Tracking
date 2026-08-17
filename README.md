@@ -15,7 +15,9 @@ This branch can register three native-menu pages with Absolute Control Panel:
 - **Axes** — the complete scrollable yaw, pitch, and roll configuration surface; and
 - **Bindings** — the legacy menu shortcut, tracking toggle, and recenter chords.
 
-The adapter dynamically discovers the already-loaded host after SFSE finishes loading plugins.
+The adapter dynamically discovers the already-loaded host at SFSE data-load, after the native
+menu host becomes ready, with one bounded retry at post-post-data-load. Discovery recognizes the
+canonical host, the current ResearchDev host, and the earlier research artifact name.
 It does not link against Absolute Control Panel, transfer configuration ownership, or make the
 host a gameplay requirement. Draft changes use the existing live configuration path, Apply uses
 the existing save path, and Cancel restores the pre-edit snapshot. Host-owned binding capture
@@ -45,10 +47,11 @@ The Control Panel is opened through its own PauseMenu entry or fallback hotkey. 
 
 - **Compatible with AbsoluteZero Ship Control.** AbsoluteZero owns the flight
   writer block; this plugin does not hook or write that seam.
-- **Not compatible with AbsoluteHOTAS.** AbsoluteHOTAS already provides the same
-  head-tracking feature and owns the same camera/flight-handler vtable seams.
-  Absolute Head Tracking checks both the loaded module and the installed DLL and
-  gracefully declines to install hooks when `AbsoluteHOTAS.dll` is present.
+- **Compatible with the current AbsoluteHOTAS camera-ownership ABI.** Absolute
+  Head Tracking declares sole ownership of camera composition after all SFSE
+  plugins load. HOTAS parks its legacy tracker and camera hook while retaining
+  its core selected-flight observer; this plugin consumes only that observer's
+  bounded signal age. Older HOTAS builds without the ABI remain fail-closed.
 - Runtime metadata is pinned to Starfield `1.16.242` and `1.16.244`, the builds
   on which these exact native offsets were validated.
 
@@ -60,7 +63,8 @@ The Control Panel is opened through its own PauseMenu entry or fallback hotkey. 
 - Deadzone, frame-rate-independent smoothing, stale-frame rejection, recenter,
   and runtime toggle.
 - Cockpit-only fail-closed camera injection through the validated
-  `FirstPersonState` quaternion seam.
+  `FirstPersonState` quaternion seam, using either the standalone local observer
+  or HOTAS's bounded shared cockpit signal.
 - A compact standalone Dear ImGui tuning window when neither shared frontend is active.
 - A versioned C-compatible API and `AbsoluteHeadTracking.workbench.json`
   manifest. Absolute Workbench can edit, save, reload, and verify this plugin's

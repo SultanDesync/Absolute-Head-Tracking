@@ -1,7 +1,9 @@
 #include "AbsoluteControlPanelAPI.h"
+#include "ControlPanelDiscovery.h"
 
 #include <cassert>
 #include <cstring>
+#include <ranges>
 
 int main() {
     using namespace AbsoluteControlPanelApi;
@@ -15,5 +17,18 @@ int main() {
     strcpy_s(binding.controlId, "recenter-binding");
     assert((binding.flags & kBindingKeyboard) != 0);
     assert(std::strcmp(kModuleId.data(), "absolute.control_panel") == 0);
+
+    using namespace ControlPanelSubscriber::Discovery;
+    assert(std::ranges::find(kHostModuleNames,
+        std::wstring_view(L"AbsoluteControlPanelResearchDev.dll")) !=
+        kHostModuleNames.end());
+    assert(DecideRegistration(Result::Ok, false) ==
+        RegistrationDecision::UseControlPanel);
+    assert(DecideRegistration(Result::NotReady, false) ==
+        RegistrationDecision::RetryAtPostPostDataLoad);
+    assert(DecideRegistration(Result::NotReady, true) ==
+        RegistrationDecision::UseFallback);
+    assert(DecideRegistration(Result::NotFound, false) ==
+        RegistrationDecision::UseFallback);
     return 0;
 }

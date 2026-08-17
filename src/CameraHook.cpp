@@ -22,6 +22,7 @@ CameraRotationFunction g_cameraRotationOriginal = nullptr;
 std::atomic<bool> g_flightHookInstalled{ false };
 std::atomic<bool> g_cameraHookInstalled{ false };
 std::atomic<std::int64_t> g_lastFlightOutputMilliseconds{ 0 };
+std::atomic<CameraHook::CockpitSignalAgeProvider> g_externalCockpitSignalProvider{};
 std::array<std::atomic<std::uint32_t>, 4> g_poseBits{
     std::bit_cast<std::uint32_t>(1.0F), std::bit_cast<std::uint32_t>(0.0F),
     std::bit_cast<std::uint32_t>(0.0F), std::bit_cast<std::uint32_t>(0.0F)
@@ -34,6 +35,10 @@ std::int64_t SteadyMilliseconds() {
 }
 
 std::int64_t FlightOutputAge() {
+    if (const auto provider =
+            g_externalCockpitSignalProvider.load(std::memory_order_acquire)) {
+        return provider();
+    }
     const auto observed = g_lastFlightOutputMilliseconds.load(std::memory_order_acquire);
     const auto now = SteadyMilliseconds();
     if (observed <= 0 || now < observed) return -1;
@@ -142,18 +147,28 @@ bool Install() {
     if (!module) return false;
 
     auto* flightSlot = reinterpret_cast<std::uintptr_t*>(module + kFlightOutputSlotRva);
-    std::uintptr_t flightOriginal = module + kFlightOutputRva;
-    g_flightOutputOriginal = reinterpret_cast<FlightOutputFunction>(flightOriginal);
-    const bool flightInstalled = InstallPointerHook(flightSlot, module + kFlightOutputRva,
-        reinterpret_cast<std::uintptr_t>(&HookedFlightOutput), flightOriginal);
-    if (!flightInstalled) {
-        g_flightOutputOriginal = nullptr;
-        RuntimePaths::Log("[CameraHook]",
-            "Cockpit observer exact gate failed; camera injection remains disabled.", true);
-        return false;
+    const bool externalObserver =
+        g_externalCockpitSignalProvider.load(std::memory_order_acquire) != nullptr;
+    if (externalObserver) {
+        RuntimePaths::Log(
+            "[CameraHook]",
+            "Using AbsoluteHOTAS's bounded cockpit signal; local flight observer hook skipped.",
+            true);
+    } else {
+        std::uintptr_t flightOriginal = module + kFlightOutputRva;
+        g_flightOutputOriginal = reinterpret_cast<FlightOutputFunction>(flightOriginal);
+        const bool flightInstalled = InstallPointerHook(
+            flightSlot, module + kFlightOutputRva,
+            reinterpret_cast<std::uintptr_t>(&HookedFlightOutput), flightOriginal);
+        if (!flightInstalled) {
+            g_flightOutputOriginal = nullptr;
+            RuntimePaths::Log("[CameraHook]",
+                "Cockpit observer exact gate failed; camera injection remains disabled.", true);
+            return false;
+        }
+        g_flightOutputOriginal = reinterpret_cast<FlightOutputFunction>(flightOriginal);
+        g_flightHookInstalled.store(true, std::memory_order_release);
     }
-    g_flightOutputOriginal = reinterpret_cast<FlightOutputFunction>(flightOriginal);
-    g_flightHookInstalled.store(true, std::memory_order_release);
 
     auto* cameraSlot = reinterpret_cast<std::uintptr_t*>(module +
         kFirstPersonStateVtableRva + kCameraRotationSlot * sizeof(std::uintptr_t));
@@ -163,16 +178,19 @@ bool Install() {
         reinterpret_cast<std::uintptr_t>(&HookedCameraRotation), cameraOriginal);
     if (!cameraInstalled) {
         g_cameraRotationOriginal = nullptr;
-        RestorePointerHook(flightSlot, reinterpret_cast<std::uintptr_t>(&HookedFlightOutput),
-            reinterpret_cast<std::uintptr_t>(g_flightOutputOriginal));
-        g_flightHookInstalled.store(false, std::memory_order_release);
+        if (g_flightHookInstalled.exchange(false, std::memory_order_acq_rel)) {
+            RestorePointerHook(flightSlot,
+                reinterpret_cast<std::uintptr_t>(&HookedFlightOutput),
+                reinterpret_cast<std::uintptr_t>(g_flightOutputOriginal));
+        }
         RuntimePaths::Log("[CameraHook]",
-            "FirstPersonState exact gate failed; all native hooks were rolled back.", true);
+            "FirstPersonState exact gate failed; owned native hooks were rolled back.", true);
         return false;
     }
     g_cameraRotationOriginal = reinterpret_cast<CameraRotationFunction>(cameraOriginal);
     g_cameraHookInstalled.store(true, std::memory_order_release);
-    RuntimePaths::Log("[CameraHook]",
+    RuntimePaths::Log("[CameraHook]", externalObserver ?
+        "Validated FirstPersonState rotation hook installed with the shared HOTAS cockpit signal." :
         "Validated cockpit observer and FirstPersonState rotation hooks installed.");
     return true;
 }
@@ -193,6 +211,15 @@ void Shutdown() {
             reinterpret_cast<std::uintptr_t>(&HookedFlightOutput),
             reinterpret_cast<std::uintptr_t>(g_flightOutputOriginal));
     }
+    g_externalCockpitSignalProvider.store(nullptr, std::memory_order_release);
+}
+
+void SetExternalCockpitSignalProvider(CockpitSignalAgeProvider provider) noexcept {
+    g_externalCockpitSignalProvider.store(provider, std::memory_order_release);
+}
+
+bool UsesExternalCockpitSignalProvider() noexcept {
+    return g_externalCockpitSignalProvider.load(std::memory_order_acquire) != nullptr;
 }
 
 void Publish(const HeadMath::Quaternion& pose, bool active) {
@@ -224,7 +251,8 @@ void Clear() {
 Status GetStatus() {
     return {
         g_cameraHookInstalled.load(std::memory_order_acquire),
-        g_flightHookInstalled.load(std::memory_order_acquire),
+        g_flightHookInstalled.load(std::memory_order_acquire) ||
+            UsesExternalCockpitSignalProvider(),
         g_poseActive.load(std::memory_order_acquire),
         FlightOutputAge(),
     };

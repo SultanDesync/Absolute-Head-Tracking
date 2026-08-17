@@ -4,6 +4,8 @@
 #include <cstdint>
 
 namespace CameraHook {
+using CockpitSignalAgeProvider = std::int64_t(__cdecl*)() noexcept;
+
 struct Status {
     bool cameraHookInstalled = false;
     bool cockpitObserverInstalled = false;
@@ -13,6 +15,8 @@ struct Status {
 
 bool Install();
 void Shutdown();
+void SetExternalCockpitSignalProvider(CockpitSignalAgeProvider provider) noexcept;
+bool UsesExternalCockpitSignalProvider() noexcept;
 void Publish(const HeadMath::Quaternion& pose, bool active);
 void Clear();
 Status GetStatus();
