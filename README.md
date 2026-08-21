@@ -1,122 +1,107 @@
-# Absolute Head Tracking
+# Absolute Head Tracking v0.2.0-alpha
 
-Absolute Head Tracking is an independent SFSE plugin that brings Absolute's
-OpenTrack-compatible rotational cockpit camera look to Starfield without the
-HOTAS/HOSAS input stack, profiles, macros, or multi-file configuration system.
+Absolute Head Tracking is an independent SFSE plugin for OpenTrack-compatible rotational cockpit
+camera control in Starfield. It provides yaw, pitch, and roll tracking without requiring the HOTAS
+flight stack, profiles, macros, or a virtual controller.
 
-Version `0.2.0-alpha` adds optional shared configuration frontends. The gameplay
-DLL remains authoritative and continues to work without either frontend.
+The current standalone release is stable for its supported rotational-tracking workflow and is the
+authoritative head-tracking module in the modular Absolute suite.
 
-## Absolute Control Panel integration (experimental)
-
-This branch can register three native-menu pages with Absolute Control Panel:
-
-- **General** — runtime, polling, response, diagnostics, and recenter controls;
-- **Axes** — the complete scrollable yaw, pitch, and roll configuration surface; and
-- **Bindings** — keyboard fallbacks plus optional Input Bus flight-control
-  bindings for tracking toggle and recenter.
-
-The adapter dynamically discovers the already-loaded host at SFSE data-load, after the native
-menu host becomes ready, with one bounded retry at post-post-data-load. Discovery recognizes the
-canonical host, the current ResearchDev host, and the earlier research artifact name.
-It does not link against Absolute Control Panel, transfer configuration ownership, or make the
-host a gameplay requirement. When the host advertises provider-owned capture and AbsoluteHOTAS
-exports Input Bus ABI 1, the two action rows record DirectInput buttons/POV directions through
-HOTAS's shared device service. Draft changes use the existing live configuration path, Apply uses
-the existing save path, and Cancel restores the pre-edit snapshot. Host-owned binding capture
-records single keyboard keys and Ctrl/Alt/Shift chords into the existing INI representation;
-provider-owned controller capture stores stable device binding strings in the same file.
-
-Frontend selection remains deliberately fail-optional during this experimental period:
-
-1. use Absolute Control Panel when its compatible host accepts registration;
-2. otherwise retain the existing Absolute Workbench integration; and
-3. otherwise retain the standalone Dear ImGui tuning window when enabled.
-
-The Control Panel is opened through its own PauseMenu entry or fallback hotkey. The existing
-`Ctrl+Alt+H` binding remains the legacy Workbench/standalone shortcut.
-
-## Absolute suite
-
-- [Absolute Workbench](https://github.com/SultanDesync/Absolute-Workbench) — optional
-  shared configuration UI for this plugin and the other daughter mods.
-- [AbsoluteHOTAS](https://github.com/SultanDesync/AbsoluteHOTAS) — complete HOTAS/HOSAS
-  flight-control stack with its own integrated head-tracking implementation.
-- [AbsoluteZero Ship Control](https://github.com/SultanDesync/AbsoluteZero-Ship-Control) —
-  lightweight mouse-alignment assistance that is compatible with this plugin.
-- **Absolute Power** — priority-based ship-power presets and automation; its public
-  repository is forthcoming.
-
-## Compatibility contract
-
-- **Compatible with AbsoluteZero Ship Control.** AbsoluteZero owns the flight
-  writer block; this plugin does not hook or write that seam.
-- **Compatible with the current AbsoluteHOTAS camera-ownership ABI.** Absolute
-  Head Tracking declares sole ownership of camera composition after all SFSE
-  plugins load. HOTAS parks its legacy tracker and camera hook while retaining
-  its core selected-flight observer. Current builds publish authoritative pilot
-  context and DirectInput edges through Absolute Input Bus ABI 1; this plugin
-  installs no duplicate flight observer. Older ownership-compatible builds use
-  the external bounded signal-age callback, while builds without the ownership
-  ABI remain fail-closed.
-- Runtime metadata is pinned to Starfield `1.16.242` and `1.16.244`, the builds
-  on which these exact native offsets were validated.
-
-## Features in the bootstrap
+## Features
 
 - OpenTrack `freetrack 2.0 Enhanced` shared-memory input.
-- Rotational yaw, pitch, and roll with independent enable, inversion,
-  sensitivity, and maximum-angle controls.
-- Deadzone, frame-rate-independent smoothing, stale-frame rejection, recenter,
-  and runtime toggle.
-- Cockpit-only fail-closed camera injection through the validated
-  `FirstPersonState` quaternion seam, using either the standalone local observer
-  or HOTAS's authoritative Input Bus pilot context.
-- A compact standalone Dear ImGui tuning window when neither shared frontend is active.
-- A versioned C-compatible API and `AbsoluteHeadTracking.workbench.json`
-  manifest. Absolute Workbench can edit, save, reload, and verify this plugin's
-  configuration without sharing C++ objects or runtime ownership.
-- Hotkey capture for the menu, tracking activation toggle, and
-  recenter action, supporting single keys and Ctrl/Alt/Shift chords.
-- Optional flight-control capture for tracking toggle and recenter through the
-  Absolute Input Bus, with keyboard bindings retained as fallbacks.
-- One easy-to-recreate configuration file: `AbsoluteHeadTracking.ini`.
+- Rotational yaw, pitch, and roll with independent enable, inversion, sensitivity, and limits.
+- Deadzone, frame-rate-independent smoothing, stale-frame rejection, recenter, and runtime toggle.
+- Cockpit-only camera injection through a validated first-person quaternion seam.
+- Native Absolute Control pages for General settings, Axes, and Bindings.
+- Keyboard binding capture for menu access, recenter, and tracking toggle.
+- Optional DirectInput button/POV capture when AbsoluteHOTAS supplies the Absolute Input Bus.
+- A standalone Dear ImGui tuning window and direct INI configuration when the shared menu is absent.
+- Fail-closed camera ownership and runtime validation.
 
-## Default controls
+Translation is intentionally not implemented; this release provides rotational tracking only.
 
-- `Ctrl+Alt+H` — open the Head Tracking page in legacy Absolute Workbench, or toggle
-  the standalone tuning window when no legacy host is active.
-- `Ctrl+Alt+C` — recenter the current OpenTrack pose.
-- `Ctrl+Alt+T` — toggle camera look at runtime.
+## Requirements
 
-The hotkeys can be changed in Absolute Control Panel, Absolute Workbench, the standalone tuning
-window, or the INI. Click a displayed binding, then
-press a single key or a chord such as `Ctrl+1`. Escape cancels capture and
-Backspace clears a binding.
+- Starfield `1.16.242` or `1.16.244`
+- [SFSE](https://sfse.silverlock.org/) `0.2.20` or later
+- [OpenTrack](https://github.com/opentrack/opentrack) with `freetrack 2.0 Enhanced` output
+- Absolute Control is recommended for the native in-game editor, but is not a gameplay dependency.
+- Address Library is **not** required by Absolute Head Tracking.
 
-Renderer selection is deferred until all SFSE plugins have loaded. A compatible Absolute Control
-Panel takes precedence without installing an overlay. If it is absent or incompatible, the
-existing Workbench/standalone arbitration runs unchanged. A suppressed or incompatible shared
-host never prevents the gameplay plugin from loading.
+## Installation
+
+Install the archive with MO2 or Vortex, or place these files manually:
+
+```text
+Data\SFSE\Plugins\AbsoluteHeadTracking.dll
+Data\SFSE\Plugins\AbsoluteHeadTracking.ini
+```
+
+Back up `AbsoluteHeadTracking.ini` before updating if you have changed its settings.
 
 ## OpenTrack setup
 
-1. Choose any OpenTrack tracker input, including Tobii or NeuralNet webcam.
+1. Select your preferred OpenTrack input, including Tobii or NeuralNet webcam tracking.
 2. Select `freetrack 2.0 Enhanced` as the output protocol.
-3. Start tracking, then launch Starfield through SFSE.
-4. Enter the pilot seat. The first valid pose becomes center automatically.
+3. Start tracking.
+4. Launch Starfield through SFSE and enter the pilot seat.
+5. The first valid pose becomes the center automatically; use the recenter binding whenever needed.
 
-Translation is intentionally not implemented in this bootstrap.
+## Configuration
 
-## Build
+With Absolute Control installed, open the Pause Menu, select **MOD OPTIONS**, and choose
+**Absolute Head Tracking**:
 
-Install [xmake](https://xmake.io), then run:
+- **General** — enablement, polling, response, diagnostics, and recenter controls.
+- **Axes** — yaw, pitch, and roll response settings in one scrollable page.
+- **Bindings** — keyboard fallbacks and optional HOTAS/Input Bus bindings.
+
+Absolute Head Tracking remains authoritative for validation, live state, persistence, Apply, and
+Cancel. Absolute Control is only the shared presentation host. If it is absent or incompatible,
+the plugin retains its standalone tuning window, legacy Workbench route, hotkeys, and INI.
+
+## Default controls
+
+- `Ctrl+Alt+H` — open the standalone/legacy tuning interface when Absolute Control is unavailable.
+- `Ctrl+Alt+C` — recenter the current pose.
+- `Ctrl+Alt+T` — toggle tracking at runtime.
+
+Bindings can be changed in Absolute Control, the standalone tuning window, or
+`AbsoluteHeadTracking.ini`. In binding capture, Escape cancels and Backspace clears a binding.
+
+## Compatibility and ownership
+
+- **AbsoluteHOTAS:** compatible through the camera-ownership ABI. When this standalone module is
+  installed, it declares camera-composition ownership and HOTAS parks its embedded legacy tracker
+  and camera hook. HOTAS continues to provide flight controls, pilot context, and—when available—the
+  Input Bus used for DirectInput binding capture.
+- **AbsoluteZero:** compatible. AbsoluteZero owns mouse pitch/yaw steering and idle centering;
+  Head Tracking owns cockpit camera composition. They do not write the same seam.
+- **Older incompatible HOTAS builds:** Head Tracking fails closed instead of allowing competing
+  camera writers.
+
+All optional host discovery is dynamic. A missing Absolute Control, HOTAS, Input Bus, or legacy
+Workbench is a normal supported state and never prevents the gameplay plugin from loading.
+
+## Absolute suite
+
+- [Absolute Control](https://github.com/SultanDesync/Absolute-Control) — shared native PauseMenu
+  configuration host.
+- [AbsoluteHOTAS](https://www.nexusmods.com/starfield/mods/16668) — HOTAS/HOSAS flight control and
+  optional Input Bus provider.
+- [AbsoluteZero](https://www.nexusmods.com/starfield/mods/17460) — mouse alignment and locked-reticule
+  steering.
+- [Absolute Power](https://github.com/SultanDesync/Absolute-Power) — priority-based ship-power
+  presets.
+## Building
+
+Install xmake, then run:
 
 ```powershell
 xmake f -m releasedbg
-xmake
-xmake test
+xmake build AbsoluteHeadTracking
 ```
 
-The build stages an MO2-shaped layout under
+The release build stages an MO2-shaped layout under
 `contrib/PluginRelease/Data/SFSE/Plugins`.
