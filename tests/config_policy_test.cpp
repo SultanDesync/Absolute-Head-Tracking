@@ -18,6 +18,9 @@ int main() {
     config.yaw.sensitivity = 0.0F;
     config.pitch.maximumDegrees = 500.0F;
     config.workbench.virtualKey = 999;
+    config.recenterControllerBinding = "invalid";
+    config.toggleControllerBinding =
+        "{12345678-1234-1234-1234-123456789ABC}@button:33";
     ConfigPolicy::Sanitize(config);
     CHECK(config.pollRateHz == 30);
     CHECK(config.staleMilliseconds == 5000);
@@ -26,6 +29,8 @@ int main() {
     CHECK(config.yaw.sensitivity == 0.05F);
     CHECK(config.pitch.maximumDegrees == 180.0F);
     CHECK(config.workbench.virtualKey == 0xFF);
+    CHECK(config.recenterControllerBinding.empty());
+    CHECK(!config.toggleControllerBinding.empty());
 
     CHECK(!ConfigPolicy::ShouldBlockForAbsoluteHOTAS(false, false));
     CHECK(ConfigPolicy::ShouldBlockForAbsoluteHOTAS(true, false));

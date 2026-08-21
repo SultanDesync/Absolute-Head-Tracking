@@ -90,6 +90,10 @@ bool Load() {
         loaded.workbench = ReadHotkey(ini, "Workbench", loaded.workbench);
         loaded.recenter = ReadHotkey(ini, "Recenter", loaded.recenter);
         loaded.toggle = ReadHotkey(ini, "Toggle", loaded.toggle);
+        loaded.recenterControllerBinding = ini.GetValue(
+            "Hotkeys", "sRecenterControllerBinding", "");
+        loaded.toggleControllerBinding = ini.GetValue(
+            "Hotkeys", "sToggleControllerBinding", "");
     }
 
     ConfigPolicy::Sanitize(loaded);
@@ -131,6 +135,10 @@ bool Save() {
     WriteHotkey(ini, "Workbench", config.workbench);
     WriteHotkey(ini, "Recenter", config.recenter);
     WriteHotkey(ini, "Toggle", config.toggle);
+    ini.SetValue("Hotkeys", "sRecenterControllerBinding",
+        config.recenterControllerBinding.c_str(), nullptr, true);
+    ini.SetValue("Hotkeys", "sToggleControllerBinding",
+        config.toggleControllerBinding.c_str(), nullptr, true);
 
     const auto path = RuntimePaths::IniPath().string();
     if (ini.SaveFile(path.c_str()) < 0) {

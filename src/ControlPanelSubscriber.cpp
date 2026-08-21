@@ -6,6 +6,7 @@
 #include "Config.h"
 #include "ControlPanelDiscovery.h"
 #include "HeadTracking.h"
+#include "InputBusClient.h"
 #include "RuntimePaths.h"
 
 namespace {
@@ -99,12 +100,29 @@ const std::array g_axesControls{
 };
 static_assert(std::tuple_size_v<decltype(g_axesControls)> == 12);
 const std::array g_bindingControls{
-    Control(ControlKind::InputBinding, kKeyboardChord, "panel-binding", "Legacy menu shortcut",
+    Control(ControlKind::InputBinding, kKeyboardChord, "panel-binding", "Legacy menu shortcut (keyboard)",
         "Legacy standalone menu chord. Absolute Control Panel itself remains available through its own entry."),
-    Control(ControlKind::InputBinding, kKeyboardChord, "toggle-binding", "Tracking toggle",
+    Control(ControlKind::InputBinding, kKeyboardChord, "toggle-binding", "Tracking toggle (keyboard)",
         "Enable or suspend tracking without changing the saved master switch."),
-    Control(ControlKind::InputBinding, kKeyboardChord, "recenter-binding", "Recenter",
+    Control(ControlKind::InputBinding, kKeyboardChord, "recenter-binding", "Recenter (keyboard)",
         "Capture the current OpenTrack pose as neutral.")
+};
+
+constexpr std::uint32_t kControllerBinding = kBindingController |
+    kBindingClearable;
+const std::array g_busBindingControls{
+    Control(ControlKind::InputBinding, kKeyboardChord, "panel-binding", "Legacy menu shortcut (keyboard)",
+        "Legacy standalone menu chord. Absolute Control Panel itself remains available through its own entry."),
+    Control(ControlKind::InputBinding, kKeyboardChord, "toggle-binding", "Tracking toggle (keyboard)",
+        "Keyboard fallback for enabling or suspending head tracking."),
+    Control(ControlKind::InputBinding, kControllerBinding,
+        "toggle-controller-binding", "Tracking toggle (flight control)",
+        "Record a joystick, throttle, button-box, or POV control through the Absolute Input Bus."),
+    Control(ControlKind::InputBinding, kKeyboardChord, "recenter-binding", "Recenter (keyboard)",
+        "Keyboard fallback for capturing the current OpenTrack pose as neutral."),
+    Control(ControlKind::InputBinding, kControllerBinding,
+        "recenter-controller-binding", "Recenter (flight control)",
+        "Record a joystick, throttle, button-box, or POV control through the Absolute Input Bus.")
 };
 
 AxisSettings* Axis(Config& config, std::string_view id) noexcept {
@@ -128,6 +146,12 @@ Result __cdecl Read(void*, const char* rawId, ValueV1* output) noexcept {
         else if (id == "panel-binding") *output = String(BindingCodec::Display(config.workbench));
         else if (id == "toggle-binding") *output = String(BindingCodec::Display(config.toggle));
         else if (id == "recenter-binding") *output = String(BindingCodec::Display(config.recenter));
+        else if (id == "toggle-controller-binding")
+            *output = String(InputBusClient::DisplayBinding(
+                config.toggleControllerBinding));
+        else if (id == "recenter-controller-binding")
+            *output = String(InputBusClient::DisplayBinding(
+                config.recenterControllerBinding));
         else if (const auto* axis = Axis(const_cast<Config&>(config), id)) {
             if (id.ends_with("-enabled")) *output = Boolean(axis->enabled);
             else if (id.ends_with("-inverted")) *output = Boolean(axis->inverted);
@@ -181,6 +205,18 @@ Result __cdecl Write(void*, const char* rawId, const ValueV1* value) noexcept {
                     else proposed.recenter = parsed;
                 }
             }
+        } else if (id == "toggle-controller-binding" ||
+            id == "recenter-controller-binding") {
+            if (value->kind == ValueKind::String &&
+                std::memchr(value->stringValue, '\0', kStringValueCapacity)) {
+                const std::string_view binding{value->stringValue};
+                accepted = InputBusClient::IsDigitalBinding(binding);
+                if (accepted) {
+                    if (id == "toggle-controller-binding")
+                        proposed.toggleControllerBinding = binding;
+                    else proposed.recenterControllerBinding = binding;
+                }
+            }
         } else if (auto* axis = Axis(proposed, id)) {
             if (id.ends_with("-enabled")) accepted = BooleanValue(*value, axis->enabled);
             else if (id.ends_with("-inverted")) accepted = BooleanValue(*value, axis->inverted);
@@ -215,6 +251,76 @@ void __cdecl Cancel(void*) noexcept {
     g_editing = false;
 }
 
+bool ControllerBindingControl(std::string_view id) noexcept {
+    return id == "toggle-controller-binding" ||
+        id == "recenter-controller-binding";
+}
+
+Result __cdecl BeginBindingCapture(void*, const char* rawId) noexcept {
+    if (!rawId || !ControllerBindingControl(rawId)) return Result::NotFound;
+    switch (InputBusClient::BeginDigitalCapture()) {
+    case AbsoluteInputBusApi::Result::Ok: return Result::Ok;
+    case AbsoluteInputBusApi::Result::NotReady: return Result::NotReady;
+    case AbsoluteInputBusApi::Result::InvalidArgument:
+        return Result::InvalidArgument;
+    default: return Result::Rejected;
+    }
+}
+
+Result __cdecl PollBindingCapture(void*, const char* rawId,
+    BindingCaptureV1* output) noexcept {
+    if (!rawId || !ControllerBindingControl(rawId) || !output ||
+        output->structSize < sizeof(*output)) return Result::InvalidArgument;
+    AbsoluteInputBusApi::CaptureResultV1 capture;
+    const auto result = InputBusClient::PollCapture(capture);
+    if (result == AbsoluteInputBusApi::Result::NotReady) return Result::NotReady;
+    if (result != AbsoluteInputBusApi::Result::Ok) return Result::Rejected;
+    *output = {};
+    switch (capture.state) {
+    case AbsoluteInputBusApi::CaptureState::Idle:
+        output->state = BindingCaptureState::Idle;
+        break;
+    case AbsoluteInputBusApi::CaptureState::Capturing:
+        output->state = BindingCaptureState::Capturing;
+        break;
+    case AbsoluteInputBusApi::CaptureState::Captured:
+        output->state = BindingCaptureState::Captured;
+        break;
+    case AbsoluteInputBusApi::CaptureState::Cancelled:
+        output->state = BindingCaptureState::Cancelled;
+        break;
+    case AbsoluteInputBusApi::CaptureState::TimedOut:
+        output->state = BindingCaptureState::TimedOut;
+        break;
+    case AbsoluteInputBusApi::CaptureState::Error:
+        output->state = BindingCaptureState::Error;
+        break;
+    }
+    if (std::memchr(capture.binding.bindingText, '\0',
+            sizeof(capture.binding.bindingText))) {
+        Copy(output->binding, capture.binding.bindingText);
+    } else if (output->state == BindingCaptureState::Captured) {
+        output->state = BindingCaptureState::Error;
+    }
+    if (std::memchr(capture.detail, '\0', sizeof(capture.detail))) {
+        Copy(output->detail, capture.detail);
+    }
+    if (output->state == BindingCaptureState::Captured &&
+        !InputBusClient::IsDigitalBinding(output->binding)) {
+        output->state = BindingCaptureState::Error;
+        Copy(output->detail, "Absolute Input Bus returned an invalid digital binding.");
+    }
+    return Result::Ok;
+}
+
+Result __cdecl CancelBindingCapture(void*, const char* rawId) noexcept {
+    if (!rawId || !ControllerBindingControl(rawId)) return Result::NotFound;
+    const auto result = InputBusClient::CancelCapture();
+    return result == AbsoluteInputBusApi::Result::Ok ||
+        result == AbsoluteInputBusApi::Result::StaleSession
+        ? Result::Ok : Result::Rejected;
+}
+
 PageDescriptorV1 Page(std::string_view id, std::string_view label,
     std::string_view description, const ControlDescriptorV1* controls,
     std::uint32_t count) {
@@ -243,10 +349,9 @@ const ModuleDescriptorV1 g_module = [] {
 
 const std::array g_pages{
     Page("general", "General", "Runtime, response, diagnostics, and recenter controls.", g_generalControls.data(), static_cast<std::uint32_t>(g_generalControls.size())),
-    Page("axes", "Axes", "Yaw, pitch, and roll response settings.", g_axesControls.data(), static_cast<std::uint32_t>(g_axesControls.size())),
-    Page("bindings", "Bindings", "Record single keys or Ctrl, Alt, and Shift chords.", g_bindingControls.data(), static_cast<std::uint32_t>(g_bindingControls.size()))
+    Page("axes", "Axes", "Yaw, pitch, and roll response settings.", g_axesControls.data(), static_cast<std::uint32_t>(g_axesControls.size()))
 };
-static_assert(std::tuple_size_v<decltype(g_pages)> == 3);
+static_assert(std::tuple_size_v<decltype(g_pages)> == 2);
 
 bool Valid(const ApiV1* api) noexcept {
     constexpr auto required = offsetof(ApiV1, registerModule) + sizeof(api->registerModule);
@@ -276,9 +381,32 @@ AbsoluteControlPanelApi::Result RegisterDiscoveredHost() noexcept {
                 const auto result = api->registerPage(&page);
                 if (result != Result::Ok && result != Result::Duplicate) return result;
             }
+            const bool providerCapture = api->structSize >=
+                    offsetof(ApiV1, capabilities) + sizeof(api->capabilities) &&
+                (api->capabilities & kCapabilityProviderBindingCapture) != 0;
+            auto bindings = providerCapture
+                ? Page("bindings", "Bindings",
+                    "Record keyboard fallbacks and DirectInput flight controls.",
+                    g_busBindingControls.data(),
+                    static_cast<std::uint32_t>(g_busBindingControls.size()))
+                : Page("bindings", "Bindings",
+                    "Record single keys or Ctrl, Alt, and Shift chords.",
+                    g_bindingControls.data(),
+                    static_cast<std::uint32_t>(g_bindingControls.size()));
+            if (providerCapture) {
+                bindings.beginBindingCapture = &BeginBindingCapture;
+                bindings.pollBindingCapture = &PollBindingCapture;
+                bindings.cancelBindingCapture = &CancelBindingCapture;
+            }
+            const auto bindingResult = api->registerPage(&bindings);
+            if (bindingResult != Result::Ok &&
+                bindingResult != Result::Duplicate) return bindingResult;
             g_hostApi.store(api, std::memory_order_release);
             RuntimePaths::Log("[ControlPanel]",
-                "Registered three dynamic pages with Absolute Control Panel.", true);
+                providerCapture
+                    ? "Registered three dynamic pages with provider-owned flight-control capture."
+                    : "Registered three dynamic pages with keyboard capture; the host does not advertise provider capture.",
+                true);
             return Result::Ok;
         }
         return Result::NotFound;

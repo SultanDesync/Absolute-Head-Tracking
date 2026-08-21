@@ -143,7 +143,9 @@ Result __cdecl ApplyConfiguration(const ConfigurationV1* input) noexcept {
         return Result::InvalidArgument;
     }
     try {
-        Config config;
+        // ABI v1 predates DirectInput bus bindings. Preserve those provider-owned
+        // fields when an older suite client applies the v1 configuration record.
+        Config config = Configuration::Get();
         config.enabled = input->enabled != 0;
         config.enableLog = input->enableLog != 0;
         config.enableWorkbench = input->enableStandaloneWorkbench != 0;

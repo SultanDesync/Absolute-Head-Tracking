@@ -1,5 +1,7 @@
 #include "Config.h"
 
+#include "InputBusBinding.h"
+
 #include <algorithm>
 
 namespace ConfigPolicy {
@@ -28,6 +30,16 @@ void Sanitize(Config& config) {
     sanitizeHotkey(config.workbench);
     sanitizeHotkey(config.recenter);
     sanitizeHotkey(config.toggle);
+
+    InputBusBinding::Parsed binding;
+    if (!config.recenterControllerBinding.empty() &&
+        !InputBusBinding::Parse(config.recenterControllerBinding, binding)) {
+        config.recenterControllerBinding.clear();
+    }
+    if (!config.toggleControllerBinding.empty() &&
+        !InputBusBinding::Parse(config.toggleControllerBinding, binding)) {
+        config.toggleControllerBinding.clear();
+    }
 }
 
 bool ShouldBlockForAbsoluteHOTAS(bool moduleLoaded, bool dllPresent) noexcept {

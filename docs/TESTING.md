@@ -30,8 +30,8 @@ shared-menu rendering, and the Head Tracking/HOTAS camera boundary.
 
 Known product gaps remain explicit:
 
-- Head Tracking actions cannot yet be captured from joystick/flight controls through Absolute
-  Control.
+- Head Tracking Input Bus action capture and execution are build-verified but still need the
+  physical DirectInput runtime journey below.
 - Absolute Power actions likewise cannot yet be bound to joystick controls.
 - The current AbsoluteHOTAS pages are a proof of concept/technical demonstration, not the completed
   HOTAS configuration experience.
@@ -63,6 +63,9 @@ Run each scenario on Starfield 1.16.242 and 1.16.244 where practical.
 - Toggle runtime tracking off and on; re-enable must capture a fresh center.
 - Capture single-key and modifier-chord bindings for the menu, activation toggle,
   and recenter. Confirm capture itself does not trigger any runtime action.
+- Through Absolute Control, capture a DirectInput button and POV for tracking toggle/recenter.
+  Exercise Escape cancellation, Backspace clear, timeout, Apply, Discard, restart/read-back, and
+  confirm capture never replays as an action. Confirm each saved control fires once per press.
 - Change the workbench binding, close it, and confirm only the new binding reopens it.
 - Leave the pilot seat and verify injection stops within 400 ms.
 - Walk on foot in first person for at least five minutes and confirm head pose is
@@ -78,7 +81,8 @@ Run each scenario on Starfield 1.16.242 and 1.16.244 where practical.
 - Confirm the HOTAS log reports that its legacy tracker is parked and its
   FirstPersonState hook is skipped or released.
 - Confirm the Head Tracking log reports a successful camera-ownership ABI
-  connection before installing its FirstPersonState hook.
+  connection and Input Bus pilot-context selection before installing its
+  FirstPersonState hook. Confirm it reports that the local observer was skipped.
 - With an older/incompatible HOTAS DLL, confirm Head Tracking installs no native
   hook and reports inactive/fail-closed rather than racing the camera slot.
 

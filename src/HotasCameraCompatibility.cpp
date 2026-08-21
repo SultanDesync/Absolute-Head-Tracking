@@ -44,7 +44,7 @@ Result Connect() noexcept
         g_api.store(api, std::memory_order_release);
         RuntimePaths::Log(
             "[Compatibility]",
-            "AbsoluteHOTAS released the camera seam; borrowing its bounded cockpit signal.",
+            "AbsoluteHOTAS released the camera seam; its selected-flight observer remains the suite context owner.",
             true);
         return Result::Connected;
     } catch (...) {

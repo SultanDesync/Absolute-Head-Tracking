@@ -3,15 +3,20 @@
 ## Supported
 
 - AbsoluteZero Ship Control (`AbsoluteZero.dll`)
+- AbsoluteHOTAS builds that expose camera-ownership ABI 1; current builds also
+  expose Absolute Input Bus ABI 1 for pilot context and controller bindings
 - OpenTrack inputs that publish FreeTrack 2.0 Enhanced output
 - Starfield runtimes 1.16.242 and 1.16.244
 
-## Deliberately blocked
+## Fail-closed HOTAS arbitration
 
-`AbsoluteHOTAS.dll` is blocked even if SFSE has not loaded it yet. Merely checking
-`GetModuleHandle` would make compatibility depend on alphabetical plugin load
-order, so startup also checks for the DLL beside this plugin. The process returns
-success to SFSE but installs no hooks and records the reason in the log.
+Absolute Head Tracking becomes the sole camera-composition owner only after HOTAS
+explicitly releases its legacy camera seam. Current builds then consume HOTAS's
+authoritative pilot classification through the Input Bus and install no local
+flight observer. Older builds with the camera-ownership ABI use its external
+signal-age callback instead. A HOTAS DLL without the ownership ABI remains
+fail-closed: Head Tracking installs no competing gameplay hook and records the
+reason in its log.
 
 ## Overlay compatibility
 

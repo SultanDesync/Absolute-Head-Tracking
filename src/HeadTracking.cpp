@@ -4,6 +4,7 @@
 #include "CameraHook.h"
 #include "Config.h"
 #include "HeadMath.h"
+#include "InputBusClient.h"
 #include "RuntimePaths.h"
 #include "WorkbenchHost.h"
 
@@ -62,7 +63,8 @@ void PollLoop() {
         const bool workbenchDown = HotkeyDown(config.workbench);
         const bool recenterDown = HotkeyDown(config.recenter);
         const bool toggleDown = HotkeyDown(config.toggle);
-        if (!WorkbenchHost::IsInputCaptureActive()) {
+        const bool inputCaptureActive = WorkbenchHost::IsInputCaptureActive();
+        if (!inputCaptureActive) {
             if (workbenchDown && !previousWorkbench)
                 WorkbenchHost::HandleLegacyMenuShortcut();
             if (recenterDown && !previousRecenter) g_recenterRequested.store(true);
@@ -71,6 +73,18 @@ void PollLoop() {
         previousWorkbench = workbenchDown;
         previousRecenter = recenterDown;
         previousToggle = toggleDown;
+
+        const auto controllerActions = InputBusClient::PollActions(
+            config.toggleControllerBinding,
+            config.recenterControllerBinding, inputCaptureActive);
+        if (controllerActions.recenterPresses != 0) {
+            g_recenterRequested.store(true, std::memory_order_release);
+        }
+        // Preserve the semantics of every captured toggle edge without emitting
+        // redundant state transitions when an even number accumulated.
+        if ((controllerActions.togglePresses & 1U) != 0) {
+            HeadTracking::ToggleRuntime();
+        }
 
         OpenTrack::Sample sample{};
         const bool haveSample = OpenTrack::Read(sample, config.staleMilliseconds);

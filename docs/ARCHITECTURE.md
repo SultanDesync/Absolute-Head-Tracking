@@ -2,7 +2,7 @@
 
 ## Runtime boundary
 
-The plugin is intentionally divided into five narrow services:
+The plugin is intentionally divided into six narrow services:
 
 1. `OpenTrack` owns the FreeTrack 2.0 shared-memory mapping and stale-frame
    detection.
@@ -10,20 +10,24 @@ The plugin is intentionally divided into five narrow services:
    polling thread.
 3. `CameraHook` always owns the first-person camera rotation post-composition
    hook. Standalone, it also owns a read-only flight-output observer used as a
-   fresh cockpit signal. With AbsoluteHOTAS, it borrows that signal through the
-   bounded camera-ownership ABI and installs no duplicate observer hook.
+   fresh cockpit signal. With AbsoluteHOTAS, pilot context comes from the
+   Absolute Input Bus and no duplicate observer hook is installed.
 4. `Configuration` owns one synchronized `Config` value and one INI file.
 5. `SuiteApi` exposes copied POD snapshots and commands. `WorkbenchHost`
    chooses either the optional suite host or the local `UIHook`/`Workbench`
    renderer. Renderer failure cannot disable manual INI configuration or alter
    the native camera.
+6. `InputBusClient` optionally consumes copied DirectInput edges, capture
+   results, profile identity, and authoritative pilot context from AbsoluteHOTAS.
+   Discovery is dynamic; no import library or device interface crosses the DLL
+   boundary.
 
 ## Camera safety gate
 
 A pose reaches Starfield only when all of the following are true:
 
-- the exact-build camera hook and either the local observer or shared HOTAS
-  cockpit-signal provider are ready;
+- the exact-build camera hook and either the local observer or authoritative
+  HOTAS Input Bus context are ready;
 - OpenTrack has a finite frame newer than the configured stale timeout;
 - tracking and its runtime toggle are enabled;
 - the flight-output observer ran within the last 400 ms;
@@ -44,12 +48,14 @@ Camera arbitration is deferred to SFSE `kPostPostLoad`, after daughter DLL load
 order has settled. Absolute Head Tracking queries
 `AbsoluteHOTAS_QueryCameraOwnershipApi(1)` and declares camera ownership. HOTAS
 then parks its embedded tracker, skips or restores its legacy camera hook, and
-continues owning the flight-output hook required by its flight runtime. Its
-shared observer timestamp is updated independently of HOTAS controller
-acquisition/enabled state, matching this plugin's standalone cockpit observer.
-This plugin receives only a copied cockpit-signal age through the ABI; no game
-object or address crosses the DLL boundary. If the declaration, release, or
-observer-ready checks fail, this plugin installs no gameplay hook.
+continues owning the flight-output observer required by its flight runtime. The
+Input Bus publishes copied runtime context, validity bits, and selected-output
+age. Head Tracking requires authoritative `Piloting` context and still applies
+its strict 400 ms camera freshness gate. The local flight observer is skipped.
+The older camera-ownership signal-age callback remains an external compatibility
+fallback and never re-enables local detection. No game object or address crosses
+either DLL boundary. If declaration/release checks fail, this plugin installs no
+gameplay hook.
 
 ## Workbench renderer provenance
 

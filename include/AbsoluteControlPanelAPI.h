@@ -19,6 +19,7 @@ enum class Result : std::uint32_t {
 };
 enum class ControlKind : std::uint32_t {
     Toggle, IntegerSlider, FloatSlider, Choice, Action, InputBinding,
+    TextInput,
     ButtonBinding = InputBinding
 };
 enum class ValueKind : std::uint32_t { Boolean, Integer, Float, String };
@@ -27,6 +28,9 @@ enum ControlFlags : std::uint32_t {
     kControlReadOnly = 1U << 0,
     kControlRequiresRestart = 1U << 1,
     kControlAdvanced = 1U << 2,
+    kControlMutatesDraft = 1U << 3,
+    kControlAppliesDraftBeforeInvoke = 1U << 4,
+    kControlTransientChoice = 1U << 5,
     kBindingKeyboard = 1U << 8,
     kBindingMouse = 1U << 9,
     kBindingController = 1U << 10,
@@ -57,6 +61,29 @@ using WriteDraftCallback = Result(__cdecl*)(void*, const char*, const ValueV1*) 
 using InvokeActionCallback = Result(__cdecl*)(void*, const char*) noexcept;
 using ApplyCallback = Result(__cdecl*)(void*) noexcept;
 using CancelCallback = void(__cdecl*)(void*) noexcept;
+struct ChoiceOptionV1 {
+    std::uint32_t structSize{sizeof(ChoiceOptionV1)};
+    std::int64_t value{};
+    char label[kLabelCapacity]{};
+};
+using ReadChoiceOptionsCallback = Result(__cdecl*)(void*, const char*,
+    ChoiceOptionV1*, std::uint32_t, std::uint32_t*) noexcept;
+
+enum class BindingCaptureState : std::uint32_t {
+    Idle, Capturing, Captured, Cancelled, TimedOut, Error
+};
+struct BindingCaptureV1 {
+    std::uint32_t structSize{sizeof(BindingCaptureV1)};
+    BindingCaptureState state{BindingCaptureState::Idle};
+    char binding[kStringValueCapacity]{};
+    char detail[kDescriptionCapacity]{};
+};
+using BeginBindingCaptureCallback = Result(__cdecl*)(
+    void*, const char*) noexcept;
+using PollBindingCaptureCallback = Result(__cdecl*)(
+    void*, const char*, BindingCaptureV1*) noexcept;
+using CancelBindingCaptureCallback = Result(__cdecl*)(
+    void*, const char*) noexcept;
 struct ModuleDescriptorV1 {
     std::uint32_t structSize{sizeof(ModuleDescriptorV1)};
     char moduleId[kIdentifierCapacity]{};
@@ -77,6 +104,17 @@ struct PageDescriptorV1 {
     InvokeActionCallback invokeAction{};
     ApplyCallback apply{};
     CancelCallback cancel{};
+    ReadChoiceOptionsCallback readChoiceOptions{};
+    BeginBindingCaptureCallback beginBindingCapture{};
+    PollBindingCaptureCallback pollBindingCapture{};
+    CancelBindingCaptureCallback cancelBindingCapture{};
+};
+inline constexpr std::uint32_t kPageDescriptorV1BaseSize =
+    static_cast<std::uint32_t>(offsetof(PageDescriptorV1, readChoiceOptions));
+enum ApiCapabilities : std::uint64_t {
+    kCapabilityNone = 0,
+    kCapabilityLabeledChoices = 1ULL << 0,
+    kCapabilityProviderBindingCapture = 1ULL << 1
 };
 struct ApiV1 {
     std::uint32_t structSize{sizeof(ApiV1)};
@@ -90,10 +128,15 @@ struct ApiV1 {
     Result(__cdecl* registerModule)(const ModuleDescriptorV1*) noexcept{};
     std::uint8_t(__cdecl* isOpen)() noexcept{};
     std::uint8_t(__cdecl* isInputCaptureActive)() noexcept{};
+    std::uint64_t capabilities{kCapabilityNone};
 };
+inline constexpr std::uint32_t kApiV1BaseSize =
+    static_cast<std::uint32_t>(offsetof(ApiV1, capabilities));
 static_assert(std::is_trivially_copyable_v<ValueV1>);
 static_assert(std::is_trivially_copyable_v<ControlDescriptorV1>);
 static_assert(std::is_trivially_copyable_v<ModuleDescriptorV1>);
+static_assert(std::is_trivially_copyable_v<ChoiceOptionV1>);
+static_assert(std::is_trivially_copyable_v<BindingCaptureV1>);
 static_assert(std::is_standard_layout_v<PageDescriptorV1>);
 static_assert(std::is_standard_layout_v<ApiV1>);
 } // namespace AbsoluteControlPanelApi

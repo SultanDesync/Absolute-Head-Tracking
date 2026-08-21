@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 struct AxisSettings {
     bool enabled = true;
@@ -31,6 +32,8 @@ struct Config {
     HotkeySettings workbench{ 0x48, true, true, false };
     HotkeySettings recenter{ 0x43, true, true, false };
     HotkeySettings toggle{ 0x54, true, true, false };
+    std::string recenterControllerBinding;
+    std::string toggleControllerBinding;
 };
 
 namespace ConfigPolicy {

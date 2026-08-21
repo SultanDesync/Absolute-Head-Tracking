@@ -6,6 +6,7 @@
 #include "ControlPanelSubscriber.h"
 #include "HeadTracking.h"
 #include "HotasCameraCompatibility.h"
+#include "InputBusClient.h"
 #include "Plugin.h"
 #include "RuntimePaths.h"
 #include "SFSEInterface.h"
@@ -62,8 +63,27 @@ void InitializeRuntime() {
                 true);
             return;
         }
-        CameraHook::SetExternalCockpitSignalProvider(
-            &HotasCameraCompatibility::CockpitSignalAgeMilliseconds);
+        const auto busResult = InputBusClient::Connect();
+        if (busResult == InputBusClient::ConnectResult::Connected) {
+            CameraHook::SetExternalCockpitSignalProvider(
+                &InputBusClient::PilotSignalAgeMilliseconds);
+            RuntimePaths::Log(
+                "[Compatibility]",
+                "Absolute Input Bus selected as the authoritative pilot-context source; "
+                "the local Head Tracking flight observer will not be installed.",
+                true);
+        } else {
+            // Older compatible HOTAS builds still expose the same observer through
+            // the narrow camera-ownership ABI. This remains external and never
+            // re-enables Head Tracking's local observer.
+            CameraHook::SetExternalCockpitSignalProvider(
+                &HotasCameraCompatibility::CockpitSignalAgeMilliseconds);
+            RuntimePaths::Log(
+                "[InputBus]",
+                "AbsoluteHOTAS camera arbitration is available, but Input Bus ABI 1 is not. "
+                "Using its legacy external cockpit signal; controller bindings remain disabled.",
+                true);
+        }
         SuiteState::SetInactiveByHOTAS(false);
         cameraReady = CameraHook::Install();
     } else {
