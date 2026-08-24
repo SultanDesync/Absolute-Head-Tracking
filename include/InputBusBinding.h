@@ -9,6 +9,7 @@ namespace InputBusBinding {
 enum class Kind : std::uint8_t {
     Button,
     PovDirection,
+    Axis,
 };
 
 struct Parsed {
@@ -18,6 +19,8 @@ struct Parsed {
     std::uint32_t digitalChannel{};
     std::uint32_t povIndex{};
     std::uint32_t povDirection{};
+    std::uint32_t axisIndex{};
+    std::uint32_t axisUsage{};
 };
 
 struct PressCounter {
@@ -27,6 +30,7 @@ struct PressCounter {
 };
 
 [[nodiscard]] bool Parse(std::string_view binding, Parsed& output) noexcept;
+[[nodiscard]] bool IsDigital(const Parsed& binding) noexcept;
 [[nodiscard]] std::string ControlLabel(const Parsed& binding);
 
 // Rebase on first observation and producer restart. Unsigned subtraction keeps

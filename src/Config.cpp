@@ -21,6 +21,46 @@ int ReadInteger(CSimpleIniA& ini, const char* section, const char* key, int fall
     }
 }
 
+float ReadFloat(CSimpleIniA& ini, const char* section, const std::string& key,
+                float fallback) {
+    return static_cast<float>(ini.GetDoubleValue(section, key.c_str(), fallback));
+}
+
+void ReadAxisRange(CSimpleIniA& ini, const char* axisName, AxisSettings& axis) {
+    const std::string prefix = std::string("f") + axisName;
+    const std::string minimumKey = prefix + "MinimumDegrees";
+    const std::string centerKey = prefix + "CenterDegrees";
+    const std::string maximumKey = prefix + "MaximumDegrees";
+    const std::string legacyKey = std::string("fMax") + axisName + "Degrees";
+
+    const bool hasMinimum = ini.GetValue("Tracking", minimumKey.c_str(), nullptr) != nullptr;
+    const bool hasMaximum = ini.GetValue("Tracking", maximumKey.c_str(), nullptr) != nullptr;
+    if (!hasMinimum && !hasMaximum) {
+        const float legacyMaximum = std::abs(ReadFloat(
+            ini, "Tracking", legacyKey, axis.maximumDegrees));
+        axis.minimumDegrees = -legacyMaximum;
+        axis.maximumDegrees = legacyMaximum;
+    } else {
+        axis.minimumDegrees = ReadFloat(
+            ini, "Tracking", minimumKey, axis.minimumDegrees);
+        axis.maximumDegrees = ReadFloat(
+            ini, "Tracking", maximumKey, axis.maximumDegrees);
+    }
+    axis.centerDegrees = ReadFloat(
+        ini, "Tracking", centerKey, axis.centerDegrees);
+}
+
+void WriteAxisRange(CSimpleIniA& ini, const char* axisName,
+                    const AxisSettings& axis) {
+    const std::string prefix = std::string("f") + axisName;
+    ini.SetDoubleValue("Tracking", (prefix + "MinimumDegrees").c_str(),
+        axis.minimumDegrees, nullptr, true);
+    ini.SetDoubleValue("Tracking", (prefix + "CenterDegrees").c_str(),
+        axis.centerDegrees, nullptr, true);
+    ini.SetDoubleValue("Tracking", (prefix + "MaximumDegrees").c_str(),
+        axis.maximumDegrees, nullptr, true);
+}
+
 HotkeySettings ReadHotkey(CSimpleIniA& ini, const char* prefix,
                            const HotkeySettings& fallback) {
     HotkeySettings result = fallback;
@@ -75,25 +115,84 @@ bool Load() {
             "Tracking", "fPitchSensitivity", loaded.pitch.sensitivity));
         loaded.roll.sensitivity = static_cast<float>(ini.GetDoubleValue(
             "Tracking", "fRollSensitivity", loaded.roll.sensitivity));
-        loaded.yaw.maximumDegrees = static_cast<float>(ini.GetDoubleValue(
-            "Tracking", "fMaxYawDegrees", loaded.yaw.maximumDegrees));
-        loaded.pitch.maximumDegrees = static_cast<float>(ini.GetDoubleValue(
-            "Tracking", "fMaxPitchDegrees", loaded.pitch.maximumDegrees));
-        loaded.roll.maximumDegrees = static_cast<float>(ini.GetDoubleValue(
-            "Tracking", "fMaxRollDegrees", loaded.roll.maximumDegrees));
+        ReadAxisRange(ini, "Yaw", loaded.yaw);
+        ReadAxisRange(ini, "Pitch", loaded.pitch);
+        ReadAxisRange(ini, "Roll", loaded.roll);
         loaded.deadzoneDegrees = static_cast<float>(ini.GetDoubleValue(
             "Tracking", "fDeadzoneDegrees", loaded.deadzoneDegrees));
         loaded.smoothing = static_cast<float>(ini.GetDoubleValue(
             "Tracking", "fSmoothing", loaded.smoothing));
         loaded.staleMilliseconds = ReadInteger(
             ini, "Tracking", "iStaleMilliseconds", loaded.staleMilliseconds);
+        loaded.limitAimToShipForwardCone = ini.GetBoolValue(
+            "AimRestriction", "bLimitAimToShipForwardCone", loaded.limitAimToShipForwardCone);
+        loaded.firingConeHalfAngleDegrees = static_cast<float>(ini.GetDoubleValue(
+            "AimRestriction", "fFiringConeHalfAngleDegrees", loaded.firingConeHalfAngleDegrees));
         loaded.workbench = ReadHotkey(ini, "Workbench", loaded.workbench);
         loaded.recenter = ReadHotkey(ini, "Recenter", loaded.recenter);
         loaded.toggle = ReadHotkey(ini, "Toggle", loaded.toggle);
+        loaded.manualLook.lookLeft = ReadHotkey(
+            ini, "LookLeft", loaded.manualLook.lookLeft);
+        loaded.manualLook.lookRight = ReadHotkey(
+            ini, "LookRight", loaded.manualLook.lookRight);
+        loaded.manualLook.lookDown = ReadHotkey(
+            ini, "LookDown", loaded.manualLook.lookDown);
+        loaded.manualLook.lookUp = ReadHotkey(
+            ini, "LookUp", loaded.manualLook.lookUp);
+        loaded.manualLook.bankLeft = ReadHotkey(
+            ini, "BankLeft", loaded.manualLook.bankLeft);
+        loaded.manualLook.bankRight = ReadHotkey(
+            ini, "BankRight", loaded.manualLook.bankRight);
         loaded.recenterControllerBinding = ini.GetValue(
             "Hotkeys", "sRecenterControllerBinding", "");
         loaded.toggleControllerBinding = ini.GetValue(
             "Hotkeys", "sToggleControllerBinding", "");
+
+        loaded.manualLook.digitalRateDegreesPerSecond = ReadFloat(
+            ini, "ManualLook", "fDigitalRateDegreesPerSecond",
+            loaded.manualLook.digitalRateDegreesPerSecond);
+        loaded.manualLook.mouseDegreesPerCount = ReadFloat(
+            ini, "ManualLook", "fMouseDegreesPerCount",
+            loaded.manualLook.mouseDegreesPerCount);
+        loaded.manualLook.mouseModifier = static_cast<MouseLookModifier>(
+            ReadInteger(ini, "ManualLook", "iMouseModifier",
+                static_cast<int>(loaded.manualLook.mouseModifier)));
+        loaded.manualLook.invertMouseHorizontal = ini.GetBoolValue(
+            "ManualLook", "bInvertMouseHorizontal",
+            loaded.manualLook.invertMouseHorizontal);
+        loaded.manualLook.invertMouseVertical = ini.GetBoolValue(
+            "ManualLook", "bInvertMouseVertical",
+            loaded.manualLook.invertMouseVertical);
+        loaded.manualLook.controllerAxisDeadzone = ReadFloat(
+            ini, "ManualLook", "fControllerAxisDeadzone",
+            loaded.manualLook.controllerAxisDeadzone);
+        loaded.manualLook.invertControllerYaw = ini.GetBoolValue(
+            "ManualLook", "bInvertControllerYaw",
+            loaded.manualLook.invertControllerYaw);
+        loaded.manualLook.invertControllerPitch = ini.GetBoolValue(
+            "ManualLook", "bInvertControllerPitch",
+            loaded.manualLook.invertControllerPitch);
+        loaded.manualLook.invertControllerRoll = ini.GetBoolValue(
+            "ManualLook", "bInvertControllerRoll",
+            loaded.manualLook.invertControllerRoll);
+        loaded.manualLook.yawControllerAxisBinding = ini.GetValue(
+            "ManualLook", "sYawControllerAxisBinding", "");
+        loaded.manualLook.pitchControllerAxisBinding = ini.GetValue(
+            "ManualLook", "sPitchControllerAxisBinding", "");
+        loaded.manualLook.rollControllerAxisBinding = ini.GetValue(
+            "ManualLook", "sRollControllerAxisBinding", "");
+        loaded.manualLook.lookLeftControllerBinding = ini.GetValue(
+            "ManualLook", "sLookLeftControllerBinding", "");
+        loaded.manualLook.lookRightControllerBinding = ini.GetValue(
+            "ManualLook", "sLookRightControllerBinding", "");
+        loaded.manualLook.lookDownControllerBinding = ini.GetValue(
+            "ManualLook", "sLookDownControllerBinding", "");
+        loaded.manualLook.lookUpControllerBinding = ini.GetValue(
+            "ManualLook", "sLookUpControllerBinding", "");
+        loaded.manualLook.bankLeftControllerBinding = ini.GetValue(
+            "ManualLook", "sBankLeftControllerBinding", "");
+        loaded.manualLook.bankRightControllerBinding = ini.GetValue(
+            "ManualLook", "sBankRightControllerBinding", "");
     }
 
     ConfigPolicy::Sanitize(loaded);
@@ -126,19 +225,65 @@ bool Save() {
     ini.SetDoubleValue("Tracking", "fYawSensitivity", config.yaw.sensitivity, nullptr, true);
     ini.SetDoubleValue("Tracking", "fPitchSensitivity", config.pitch.sensitivity, nullptr, true);
     ini.SetDoubleValue("Tracking", "fRollSensitivity", config.roll.sensitivity, nullptr, true);
-    ini.SetDoubleValue("Tracking", "fMaxYawDegrees", config.yaw.maximumDegrees, nullptr, true);
-    ini.SetDoubleValue("Tracking", "fMaxPitchDegrees", config.pitch.maximumDegrees, nullptr, true);
-    ini.SetDoubleValue("Tracking", "fMaxRollDegrees", config.roll.maximumDegrees, nullptr, true);
+    WriteAxisRange(ini, "Yaw", config.yaw);
+    WriteAxisRange(ini, "Pitch", config.pitch);
+    WriteAxisRange(ini, "Roll", config.roll);
     ini.SetDoubleValue("Tracking", "fDeadzoneDegrees", config.deadzoneDegrees, nullptr, true);
     ini.SetDoubleValue("Tracking", "fSmoothing", config.smoothing, nullptr, true);
     ini.SetLongValue("Tracking", "iStaleMilliseconds", config.staleMilliseconds, nullptr, true);
+    ini.SetBoolValue("AimRestriction", "bLimitAimToShipForwardCone",
+        config.limitAimToShipForwardCone, nullptr, true);
+    ini.SetDoubleValue("AimRestriction", "fFiringConeHalfAngleDegrees",
+        config.firingConeHalfAngleDegrees, nullptr, true);
     WriteHotkey(ini, "Workbench", config.workbench);
     WriteHotkey(ini, "Recenter", config.recenter);
     WriteHotkey(ini, "Toggle", config.toggle);
+    WriteHotkey(ini, "LookLeft", config.manualLook.lookLeft);
+    WriteHotkey(ini, "LookRight", config.manualLook.lookRight);
+    WriteHotkey(ini, "LookDown", config.manualLook.lookDown);
+    WriteHotkey(ini, "LookUp", config.manualLook.lookUp);
+    WriteHotkey(ini, "BankLeft", config.manualLook.bankLeft);
+    WriteHotkey(ini, "BankRight", config.manualLook.bankRight);
     ini.SetValue("Hotkeys", "sRecenterControllerBinding",
         config.recenterControllerBinding.c_str(), nullptr, true);
     ini.SetValue("Hotkeys", "sToggleControllerBinding",
         config.toggleControllerBinding.c_str(), nullptr, true);
+    ini.SetDoubleValue("ManualLook", "fDigitalRateDegreesPerSecond",
+        config.manualLook.digitalRateDegreesPerSecond, nullptr, true);
+    ini.SetDoubleValue("ManualLook", "fMouseDegreesPerCount",
+        config.manualLook.mouseDegreesPerCount, nullptr, true);
+    ini.SetLongValue("ManualLook", "iMouseModifier",
+        static_cast<int>(config.manualLook.mouseModifier), nullptr, true);
+    ini.SetBoolValue("ManualLook", "bInvertMouseHorizontal",
+        config.manualLook.invertMouseHorizontal, nullptr, true);
+    ini.SetBoolValue("ManualLook", "bInvertMouseVertical",
+        config.manualLook.invertMouseVertical, nullptr, true);
+    ini.SetDoubleValue("ManualLook", "fControllerAxisDeadzone",
+        config.manualLook.controllerAxisDeadzone, nullptr, true);
+    ini.SetBoolValue("ManualLook", "bInvertControllerYaw",
+        config.manualLook.invertControllerYaw, nullptr, true);
+    ini.SetBoolValue("ManualLook", "bInvertControllerPitch",
+        config.manualLook.invertControllerPitch, nullptr, true);
+    ini.SetBoolValue("ManualLook", "bInvertControllerRoll",
+        config.manualLook.invertControllerRoll, nullptr, true);
+    ini.SetValue("ManualLook", "sYawControllerAxisBinding",
+        config.manualLook.yawControllerAxisBinding.c_str(), nullptr, true);
+    ini.SetValue("ManualLook", "sPitchControllerAxisBinding",
+        config.manualLook.pitchControllerAxisBinding.c_str(), nullptr, true);
+    ini.SetValue("ManualLook", "sRollControllerAxisBinding",
+        config.manualLook.rollControllerAxisBinding.c_str(), nullptr, true);
+    ini.SetValue("ManualLook", "sLookLeftControllerBinding",
+        config.manualLook.lookLeftControllerBinding.c_str(), nullptr, true);
+    ini.SetValue("ManualLook", "sLookRightControllerBinding",
+        config.manualLook.lookRightControllerBinding.c_str(), nullptr, true);
+    ini.SetValue("ManualLook", "sLookDownControllerBinding",
+        config.manualLook.lookDownControllerBinding.c_str(), nullptr, true);
+    ini.SetValue("ManualLook", "sLookUpControllerBinding",
+        config.manualLook.lookUpControllerBinding.c_str(), nullptr, true);
+    ini.SetValue("ManualLook", "sBankLeftControllerBinding",
+        config.manualLook.bankLeftControllerBinding.c_str(), nullptr, true);
+    ini.SetValue("ManualLook", "sBankRightControllerBinding",
+        config.manualLook.bankRightControllerBinding.c_str(), nullptr, true);
 
     const auto path = RuntimePaths::IniPath().string();
     if (ini.SaveFile(path.c_str()) < 0) {

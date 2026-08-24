@@ -24,6 +24,12 @@
       "order": 20
     },
     {
+      "id": "head-tracking-aim-restriction",
+      "title": "Head Tracking Aim Restriction",
+      "category": "Camera",
+      "order": 30
+    },
+    {
       "id": "head-tracking-diagnostics",
       "title": "Head Tracking Diagnostics",
       "category": "Diagnostics",

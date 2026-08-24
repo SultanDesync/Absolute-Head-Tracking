@@ -101,6 +101,16 @@ bool ShouldInstallStandaloneRenderer(bool standaloneEnabled) noexcept {
            !SuiteState::InactiveByHOTAS();
 }
 
+bool IsMenuOpen() noexcept {
+    if (ControlPanelSubscriber::IsMenuOpen() || SuiteState::WorkbenchOpen())
+        return true;
+    if (CurrentSelection() == Selection::Active) {
+        if (const auto* api = g_hostApi.load(std::memory_order_acquire))
+            return api->isOpen() != 0;
+    }
+    return UIHook::IsUIOpen();
+}
+
 bool IsInputCaptureActive() noexcept {
     if (ControlPanelSubscriber::IsInputCaptureActive()) {
         return true;

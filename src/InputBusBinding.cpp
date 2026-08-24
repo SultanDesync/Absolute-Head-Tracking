@@ -10,6 +10,14 @@ bool ParseUnsigned(std::string_view text, std::uint32_t& output) noexcept {
         text.data(), text.data() + text.size(), output);
     return error == std::errc{} && end == text.data() + text.size();
 }
+
+bool ParseHex(std::string_view text, std::uint32_t& output) noexcept {
+    if (!text.starts_with("0x") || text.size() <= 2) return false;
+    text.remove_prefix(2);
+    const auto [end, error] = std::from_chars(
+        text.data(), text.data() + text.size(), output, 16);
+    return error == std::errc{} && end == text.data() + text.size();
+}
 } // namespace
 
 namespace InputBusBinding {
@@ -27,6 +35,7 @@ bool Parse(std::string_view binding, Parsed& output) noexcept {
         auto control = binding.substr(separator + 1);
         constexpr std::string_view buttonPrefix = "button:";
         constexpr std::string_view povPrefix = "pov:";
+        constexpr std::string_view axisPrefix = "axis:";
         if (control.starts_with(buttonPrefix)) {
             control.remove_prefix(buttonPrefix.size());
             if (!ParseUnsigned(control, parsed.controlId) ||
@@ -53,6 +62,15 @@ bool Parse(std::string_view binding, Parsed& output) noexcept {
             parsed.digitalChannel = 128 + parsed.povIndex * 4 +
                 parsed.povDirection;
             parsed.controlId = parsed.digitalChannel + 1;
+        } else if (control.starts_with(axisPrefix)) {
+            control.remove_prefix(axisPrefix.size());
+            if (!ParseHex(control, parsed.axisUsage) ||
+                parsed.axisUsage < 0x30 || parsed.axisUsage > 0x37) {
+                return false;
+            }
+            parsed.kind = Kind::Axis;
+            parsed.axisIndex = parsed.axisUsage - 0x30;
+            parsed.controlId = parsed.axisUsage;
         } else {
             return false;
         }
@@ -63,13 +81,23 @@ bool Parse(std::string_view binding, Parsed& output) noexcept {
     }
 }
 
+bool IsDigital(const Parsed& binding) noexcept {
+    return binding.kind == Kind::Button ||
+        binding.kind == Kind::PovDirection;
+}
+
 std::string ControlLabel(const Parsed& binding) {
     if (binding.kind == Kind::Button) {
         return std::format("Button {}", binding.controlId);
     }
-    constexpr const char* directions[]{"Up", "Right", "Down", "Left"};
-    return std::format("POV {} {}", binding.povIndex + 1,
-        directions[binding.povDirection]);
+    if (binding.kind == Kind::PovDirection) {
+        constexpr const char* directions[]{"Up", "Right", "Down", "Left"};
+        return std::format("POV {} {}", binding.povIndex + 1,
+            directions[binding.povDirection]);
+    }
+    constexpr const char* axes[]{"X", "Y", "Z", "Rx", "Ry", "Rz",
+        "Slider 1", "Slider 2"};
+    return std::format("{} axis", axes[binding.axisIndex]);
 }
 
 std::uint32_t ObservePresses(PressCounter& state,

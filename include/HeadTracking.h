@@ -10,6 +10,7 @@ struct LiveState {
     OpenTrack::ConnectionState connection = OpenTrack::ConnectionState::Waiting;
     bool runtimeEnabled = true;
     bool centered = false;
+    bool poseAvailable = false;
 };
 
 bool Start();

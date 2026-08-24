@@ -1,5 +1,6 @@
 #include "PCH.h"
 
+#include "AimRestriction.h"
 #include "CameraHook.h"
 #include "CameraPolicy.h"
 #include "RuntimePaths.h"
@@ -112,16 +113,26 @@ void HookedCameraRotation(void* state, float* quaternion) {
     const auto original = g_cameraRotationOriginal;
     if (!original) return;
     original(state, quaternion);
-    if (!state || !quaternion || !g_poseActive.load(std::memory_order_acquire)) return;
+    if (!state || !quaternion || !g_poseActive.load(std::memory_order_acquire) ||
+        !AimRestriction::Ready()) {
+        AimRestriction::ClearCameraFrame();
+        return;
+    }
     if (!CameraPolicy::CockpitSignalFresh(
-            FlightOutputAge(), kCockpitFreshMilliseconds)) return;
+            FlightOutputAge(), kCockpitFreshMilliseconds)) {
+        AimRestriction::ClearCameraFrame();
+        return;
+    }
 
     const auto module = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
     std::uintptr_t playerCamera = 0;
     std::uintptr_t currentState = 0;
     if (!module || !SafeRead(module + kPlayerCameraSingletonRva, playerCamera) ||
         !playerCamera || !SafeRead(playerCamera + 0x10, currentState) ||
-        currentState != reinterpret_cast<std::uintptr_t>(state)) return;
+        currentState != reinterpret_cast<std::uintptr_t>(state)) {
+        AimRestriction::ClearCameraFrame();
+        return;
+    }
 
     std::array<float, 4> native{};
     std::array<float, 4> head{};
@@ -136,7 +147,12 @@ void HookedCameraRotation(void* state, float* quaternion) {
         native[0] * head[2] + native[1] * head[3] + native[2] * head[0] - native[3] * head[1],
         native[0] * head[3] - native[1] * head[2] + native[2] * head[1] + native[3] * head[0],
     };
-    SafeCopy(quaternion, result.data(), sizeof(result));
+    if (!SafeCopy(quaternion, result.data(), sizeof(result))) {
+        AimRestriction::ClearCameraFrame();
+        return;
+    }
+    AimRestriction::PublishCameraFrame(
+        { head[0], head[1], head[2], head[3] });
 }
 } // namespace
 
@@ -240,6 +256,7 @@ void Publish(const HeadMath::Quaternion& pose, bool active) {
 }
 
 void Clear() {
+    AimRestriction::ClearCameraFrame();
     g_poseActive.store(false, std::memory_order_release);
     constexpr std::array<float, 4> identity{ 1.0F, 0.0F, 0.0F, 0.0F };
     for (std::size_t index = 0; index < identity.size(); ++index) {

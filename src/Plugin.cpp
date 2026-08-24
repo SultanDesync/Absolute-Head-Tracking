@@ -11,7 +11,7 @@ SFSE_PLUGIN_VERSION = []() noexcept {
     data.UsesAddressLibrary(false);
     data.HasNoStructUse(true);
     data.IsLayoutDependent(false);
-    data.CompatibleVersions({ REL::Version{ 1, 16, 242, 0 }, REL::Version{ 1, 16, 244, 0 } });
+    data.CompatibleVersions({ REL::Version{ 1, 16, 244, 0 } });
     data.MinimumRequiredXSEVersion(REL::Version{ 0, 2, 20, 0 });
     return data;
 }();

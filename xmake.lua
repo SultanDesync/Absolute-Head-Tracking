@@ -1,5 +1,5 @@
 set_project("AbsoluteHeadTracking")
-set_version("0.2.0")
+set_version("1.0.0")
 set_languages("c++23")
 set_warnings("all")
 
@@ -26,10 +26,10 @@ target("AbsoluteHeadTracking")
     set_pcxxheader("include/PCH.h")
     add_defines("ABSOLUTE_HEAD_TRACKING_EXPORTS")
     add_defines(
-        "PLUGIN_VERSION_MAJOR=0",
-        "PLUGIN_VERSION_MINOR=2",
+        "PLUGIN_VERSION_MAJOR=1",
+        "PLUGIN_VERSION_MINOR=0",
         "PLUGIN_VERSION_PATCH=0",
-        "PLUGIN_VERSION_PRERELEASE=alpha"
+        "PLUGIN_VERSION_PRERELEASE=beta.1"
     )
     add_syslinks("d3d12", "dxgi", "version")
 
@@ -65,6 +65,13 @@ target("head_math_test")
     add_tests("head_math")
     add_includedirs("include")
     add_files("tests/head_math_test.cpp")
+
+target("aim_restriction_policy_test")
+    set_kind("binary")
+    set_default(false)
+    add_tests("aim_restriction_policy")
+    add_includedirs("include")
+    add_files("tests/aim_restriction_policy_test.cpp")
 
 target("config_policy_test")
     set_kind("binary")
@@ -116,3 +123,10 @@ target("input_bus_binding_test")
     add_tests("input_bus_binding_policy")
     add_includedirs("include")
     add_files("tests/input_bus_binding_test.cpp", "src/InputBusBinding.cpp")
+
+target("manual_look_policy_test")
+    set_kind("binary")
+    set_default(false)
+    add_tests("manual_look_policy")
+    add_includedirs("include")
+    add_files("tests/manual_look_policy_test.cpp")

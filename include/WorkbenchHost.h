@@ -16,6 +16,7 @@ enum class Selection {
 [[nodiscard]] Selection Select() noexcept;
 [[nodiscard]] Selection CurrentSelection() noexcept;
 [[nodiscard]] bool ShouldInstallStandaloneRenderer(bool standaloneEnabled) noexcept;
+[[nodiscard]] bool IsMenuOpen() noexcept;
 [[nodiscard]] bool IsInputCaptureActive() noexcept;
 void HandleLegacyMenuShortcut() noexcept;
 } // namespace WorkbenchHost

@@ -24,7 +24,13 @@ int main() {
     assert(!Parse("device@button:0", binding));
     assert(!Parse("device@button:129", binding));
     assert(!Parse("device@pov:4:up", binding));
-    assert(!Parse("device@axis:0x30", binding));
+    assert(Parse("device@axis:0x30", binding));
+    assert(binding.kind == Kind::Axis && binding.axisIndex == 0 &&
+        binding.axisUsage == 0x30 && ControlLabel(binding) == "X axis");
+    assert(Parse("device@axis:0x37", binding));
+    assert(binding.axisIndex == 7 && ControlLabel(binding) == "Slider 2 axis");
+    assert(!Parse("device@axis:0x2F", binding));
+    assert(!Parse("device@axis:0x38", binding));
 
     PressCounter counter;
     assert(ObservePresses(counter, 1, 10, false) == 0);

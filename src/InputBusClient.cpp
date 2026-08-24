@@ -16,6 +16,7 @@ constexpr std::string_view kConsumerId = "absolute.head_tracking";
 std::atomic<const BusApi*> g_api{};
 std::mutex g_connectMutex;
 std::mutex g_actionMutex;
+std::mutex g_lookMutex;
 std::mutex g_captureMutex;
 std::uint64_t g_captureSession{};
 
@@ -31,6 +32,9 @@ struct RuntimeBinding {
 
 RuntimeBinding g_toggle;
 RuntimeBinding g_recenter;
+std::array<RuntimeBinding, 3> g_lookAxes;
+std::array<RuntimeBinding, 3> g_lookNegative;
+std::array<RuntimeBinding, 3> g_lookPositive;
 
 template <std::size_t Size>
 bool Terminated(const char (&text)[Size]) noexcept {
@@ -51,6 +55,7 @@ bool Valid(const BusApi* api) noexcept {
         AbsoluteInputBusApi::kCapabilityDeviceEnumeration |
         AbsoluteInputBusApi::kCapabilitySnapshots |
         AbsoluteInputBusApi::kCapabilityButtonCapture |
+        AbsoluteInputBusApi::kCapabilityAxisCapture |
         AbsoluteInputBusApi::kCapabilityRuntimeContext;
     return api && api->structSize >= required &&
         api->abiVersion == AbsoluteInputBusApi::kAbiVersion &&
@@ -103,7 +108,9 @@ bool Resolve(RuntimeBinding& binding, const BusApi& api,
 std::uint32_t PollOne(RuntimeBinding& binding, std::string_view text,
     const BusApi& api, bool suppressed,
     std::chrono::steady_clock::time_point now) noexcept {
-    if (!Prepare(binding, text) || !Resolve(binding, api, now)) return 0;
+    if (!Prepare(binding, text) ||
+        !InputBusBinding::IsDigital(binding.parsed) ||
+        !Resolve(binding, api, now)) return 0;
     AbsoluteInputBusApi::DeviceSnapshotV1 snapshot;
     if (api.getSnapshot(binding.deviceIndex, &snapshot) != BusResult::Ok ||
         snapshot.connected == 0 ||
@@ -124,6 +131,31 @@ std::uint32_t PollOne(RuntimeBinding& binding, std::string_view text,
     return InputBusBinding::ObservePresses(binding.presses,
         snapshot.producerGeneration,
         snapshot.pressCount[binding.parsed.digitalChannel], suppressed);
+}
+
+bool ReadContinuous(RuntimeBinding& binding, std::string_view text,
+    const BusApi& api, std::chrono::steady_clock::time_point now,
+    AbsoluteInputBusApi::DeviceSnapshotV1& snapshot) noexcept {
+    if (!Prepare(binding, text) || !Resolve(binding, api, now)) return false;
+    if (api.getSnapshot(binding.deviceIndex, &snapshot) != BusResult::Ok ||
+        snapshot.connected == 0) {
+        binding.resolved = false;
+        binding.nextResolve = now + std::chrono::seconds(1);
+        return false;
+    }
+    return true;
+}
+
+bool DigitalDown(const RuntimeBinding& binding,
+    const AbsoluteInputBusApi::DeviceSnapshotV1& snapshot) noexcept {
+    if (!InputBusBinding::IsDigital(binding.parsed) ||
+        binding.parsed.digitalChannel >=
+            AbsoluteInputBusApi::kDigitalControlCount) {
+        return false;
+    }
+    const auto channel = binding.parsed.digitalChannel;
+    return (snapshot.digitalDown[channel / 64] &
+        (1ULL << (channel % 64))) != 0;
 }
 } // namespace
 
@@ -166,7 +198,15 @@ bool Connected() noexcept {
 bool IsDigitalBinding(std::string_view binding) noexcept {
     if (binding.empty()) return true;
     InputBusBinding::Parsed parsed;
-    return InputBusBinding::Parse(binding, parsed);
+    return InputBusBinding::Parse(binding, parsed) &&
+        InputBusBinding::IsDigital(parsed);
+}
+
+bool IsAxisBinding(std::string_view binding) noexcept {
+    if (binding.empty()) return true;
+    InputBusBinding::Parsed parsed;
+    return InputBusBinding::Parse(binding, parsed) &&
+        parsed.kind == InputBusBinding::Kind::Axis;
 }
 
 std::string DisplayBinding(std::string_view binding) {
@@ -199,6 +239,58 @@ ActionEdges PollActions(std::string_view toggleBinding,
     return actions;
 }
 
+LookInputs PollLook(const std::array<std::string_view, 3>& axisBindings,
+    const std::array<std::string_view, 3>& negativeBindings,
+    const std::array<std::string_view, 3>& positiveBindings,
+    bool suppressed) noexcept {
+    LookInputs inputs;
+    const auto* api = g_api.load(std::memory_order_acquire);
+    if (!api) return inputs;
+    try {
+        std::lock_guard lock(g_lookMutex);
+        const auto now = std::chrono::steady_clock::now();
+        for (std::size_t index = 0; index < inputs.analog.size(); ++index) {
+            AbsoluteInputBusApi::DeviceSnapshotV1 snapshot;
+            if (Prepare(g_lookAxes[index], axisBindings[index]) &&
+                g_lookAxes[index].parsed.kind == InputBusBinding::Kind::Axis) {
+                inputs.configured = true;
+                if (!suppressed && ReadContinuous(g_lookAxes[index],
+                        axisBindings[index], *api, now, snapshot)) {
+                    const auto axis = g_lookAxes[index].parsed.axisIndex;
+                    if (axis < AbsoluteInputBusApi::kAxisCount &&
+                        std::isfinite(snapshot.normalizedAxes[axis])) {
+                        inputs.analog[index] = std::clamp(
+                            snapshot.normalizedAxes[axis], -1.0F, 1.0F);
+                    }
+                }
+            }
+
+            float negative = 0.0F;
+            if (Prepare(g_lookNegative[index], negativeBindings[index]) &&
+                InputBusBinding::IsDigital(g_lookNegative[index].parsed)) {
+                inputs.configured = true;
+                if (!suppressed && ReadContinuous(g_lookNegative[index],
+                        negativeBindings[index], *api, now, snapshot) &&
+                    DigitalDown(g_lookNegative[index], snapshot)) {
+                    negative = 1.0F;
+                }
+            }
+            float positive = 0.0F;
+            if (Prepare(g_lookPositive[index], positiveBindings[index]) &&
+                InputBusBinding::IsDigital(g_lookPositive[index].parsed)) {
+                inputs.configured = true;
+                if (!suppressed && ReadContinuous(g_lookPositive[index],
+                        positiveBindings[index], *api, now, snapshot) &&
+                    DigitalDown(g_lookPositive[index], snapshot)) {
+                    positive = 1.0F;
+                }
+            }
+            inputs.digital[index] = positive - negative;
+        }
+    } catch (...) {}
+    return inputs;
+}
+
 std::int64_t __cdecl PilotSignalAgeMilliseconds() noexcept {
     const auto* api = g_api.load(std::memory_order_acquire);
     if (!api || !api->getRuntimeContext) return -1;
@@ -211,15 +303,19 @@ std::int64_t __cdecl PilotSignalAgeMilliseconds() noexcept {
     }
 }
 
-BusResult BeginDigitalCapture() noexcept {
+BusResult BeginCapture(std::uint32_t allowedControls) noexcept {
     if (!Connected() && Connect() != ConnectResult::Connected)
         return BusResult::NotReady;
+    if (allowedControls == 0 ||
+        (allowedControls & ~AbsoluteInputBusApi::kCaptureAll) != 0) {
+        return BusResult::InvalidArgument;
+    }
     const auto* api = g_api.load(std::memory_order_acquire);
     if (!api) return BusResult::NotReady;
     std::lock_guard lock(g_captureMutex);
     if (g_captureSession != 0) return BusResult::Busy;
     AbsoluteInputBusApi::CaptureRequestV1 request;
-    request.allowedControls = AbsoluteInputBusApi::kCaptureDigital;
+    request.allowedControls = allowedControls;
     request.settleMilliseconds = 50;
     request.timeoutMilliseconds = 8000;
     Copy(request.consumerId, kConsumerId);

@@ -1,5 +1,6 @@
 #include "PCH.h"
 
+#include "AimRestriction.h"
 #include "Workbench.h"
 #include "CameraHook.h"
 #include "Config.h"
@@ -254,25 +255,29 @@ void StatusLabel(const char* label, bool good, const char* detail) {
 }
 
 bool AxisEditor(const char* id, const char* label, AxisSettings& axis,
-                float tracker, float output, std::array<float, 180>& history) {
+                float tracker, float output) {
     bool changed = false;
-    std::move(history.begin() + 1, history.end(), history.begin());
-    history.back() = output;
     ImGui::PushID(id);
-    ImGui::BeginChild("AxisCard", ImVec2(0.0F, 178.0F), true);
+    ImGui::BeginChild("AxisCard", ImVec2(0.0F, 230.0F), true);
     ImGui::TextColored(kAccent, "%s", label);
     ImGui::SameLine();
-    ImGui::TextDisabled("tracker %+.1f°  output %+.1f°", tracker, output);
+    ImGui::TextDisabled("tracker %+.1f deg  output %+.1f deg", tracker, output);
     changed |= ImGui::Checkbox("Enabled", &axis.enabled);
     ImGui::SameLine();
     changed |= ImGui::Checkbox("Invert", &axis.inverted);
     ImGui::BeginDisabled(!axis.enabled);
     ImGui::SetNextItemWidth(-1.0F);
-    changed |= ImGui::SliderFloat("Sensitivity", &axis.sensitivity, 0.05F, 4.0F, "%.2fx");
+    changed |= ImGui::SliderFloat("Sensitivity", &axis.sensitivity,
+        0.05F, 10.0F, "%.2fx");
     ImGui::SetNextItemWidth(-1.0F);
-    changed |= ImGui::SliderFloat("Maximum angle", &axis.maximumDegrees, 1.0F, 180.0F, "%.0f°");
-    ImGui::PlotLines("##history", history.data(), static_cast<int>(history.size()),
-        0, nullptr, -axis.maximumDegrees, axis.maximumDegrees, ImVec2(-1.0F, 42.0F));
+    changed |= ImGui::SliderFloat("Minimum", &axis.minimumDegrees,
+        -180.0F, 180.0F, "%.0f deg");
+    ImGui::SetNextItemWidth(-1.0F);
+    changed |= ImGui::SliderFloat("Center", &axis.centerDegrees,
+        -180.0F, 180.0F, "%.0f deg");
+    ImGui::SetNextItemWidth(-1.0F);
+    changed |= ImGui::SliderFloat("Maximum", &axis.maximumDegrees,
+        -180.0F, 180.0F, "%.0f deg");
     ImGui::EndDisabled();
     ImGui::EndChild();
     ImGui::PopID();
@@ -311,9 +316,6 @@ bool IsCapturingHotkey() {
 
 void Draw() {
     static bool styleApplied = false;
-    static std::array<float, 180> yawHistory{};
-    static std::array<float, 180> pitchHistory{};
-    static std::array<float, 180> rollHistory{};
     if (g_capture.waitingForRelease && !AnyKeyboardKeyDown()) {
         g_capture.waitingForRelease = false;
         g_hotkeyCaptureActive.store(false, std::memory_order_release);
@@ -343,6 +345,7 @@ void Draw() {
     Config editing = Configuration::Get();
     const auto live = HeadTracking::GetLiveState();
     const auto hooks = CameraHook::GetStatus();
+    const auto aim = AimRestriction::GetStatus();
     bool changed = false;
     bool saveRequested = false;
 
@@ -359,6 +362,8 @@ void Draw() {
             hooks.cameraHookInstalled ? "exact gate passed" : "unavailable");
         StatusLabel("Cockpit observer", hooks.cockpitObserverInstalled,
             hooks.cockpitObserverInstalled ? "independent of AbsoluteZero" : "unavailable");
+        StatusLabel("Aim restriction", aim.installed,
+            aim.installed ? "atomic hook set ready" : "camera activation blocked");
         ImGui::TableNextColumn();
         const bool trackerConnected = live.connection == OpenTrack::ConnectionState::Connected;
         const char* trackerDetail = trackerConnected ? "live FreeTrack frames" :
@@ -384,17 +389,18 @@ void Draw() {
     if (ImGui::Button("Recenter now")) HeadTracking::RequestRecenter();
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Axes");
-    if (ImGui::BeginTable("AxisGrid", 3, ImGuiTableFlags_SizingStretchSame)) {
+    ImGui::SeparatorText("Axes (legacy fallback)");
+    const int axisColumns = ImGui::GetContentRegionAvail().x >= 960.0F ? 3 : 1;
+    if (ImGui::BeginTable("AxisGrid", axisColumns, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextColumn();
         changed |= AxisEditor("yaw", "YAW", editing.yaw,
-            live.trackerDegrees[0], live.outputDegrees[0], yawHistory);
+            live.trackerDegrees[0], live.outputDegrees[0]);
         ImGui::TableNextColumn();
         changed |= AxisEditor("pitch", "PITCH", editing.pitch,
-            live.trackerDegrees[1], live.outputDegrees[1], pitchHistory);
+            live.trackerDegrees[1], live.outputDegrees[1]);
         ImGui::TableNextColumn();
         changed |= AxisEditor("roll", "ROLL", editing.roll,
-            live.trackerDegrees[2], live.outputDegrees[2], rollHistory);
+            live.trackerDegrees[2], live.outputDegrees[2]);
         ImGui::EndTable();
     }
 
@@ -414,6 +420,19 @@ void Draw() {
             50, 2000, "%d ms");
         ImGui::EndTable();
     }
+
+    ImGui::SeparatorText("Aim Restriction");
+    changed |= ImGui::Checkbox("Limit aim to ship-forward cone",
+        &editing.limitAimToShipForwardCone);
+    ImGui::TextDisabled(
+        "Disable only to opt into unrestricted camera-relative fire and native target assistance.");
+    ImGui::BeginDisabled(!editing.limitAimToShipForwardCone);
+    ImGui::SetNextItemWidth(360.0F);
+    changed |= ImGui::SliderFloat("Half-angle", &editing.firingConeHalfAngleDegrees,
+        1.0F, 90.0F, "%.0f°");
+    ImGui::SameLine();
+    ImGui::TextDisabled("%.0f° full cone", editing.firingConeHalfAngleDegrees * 2.0F);
+    ImGui::EndDisabled();
 
     ImGui::SeparatorText("Bindings");
     changed |= HotkeyEditor("workbench", "Workbench menu",

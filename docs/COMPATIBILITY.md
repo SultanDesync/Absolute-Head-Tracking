@@ -4,9 +4,10 @@
 
 - AbsoluteZero Ship Control (`AbsoluteZero.dll`)
 - AbsoluteHOTAS builds that expose camera-ownership ABI 1; current builds also
-  expose Absolute Input Bus ABI 1 for pilot context and controller bindings
+  expose Absolute Input Bus ABI 1 for pilot context and digital/analog controller bindings
 - OpenTrack inputs that publish FreeTrack 2.0 Enhanced output
-- Starfield runtimes 1.16.242 and 1.16.244
+- Starfield runtime 1.16.244. The older 1.16.242 runtime is not advertised by
+  v1.0.0-beta.1 because its gunnery/HUD seams have not been causally qualified.
 
 ## Fail-closed HOTAS arbitration
 

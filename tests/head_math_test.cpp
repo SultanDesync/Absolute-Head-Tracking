@@ -15,6 +15,10 @@ int main() {
     CHECK(Near(HeadMath::ShapeAngle(0.5F, 1.0F, 80.0F), 0.0F));
     CHECK(Near(HeadMath::ShapeAngle(11.0F, 1.0F, 80.0F), 10.0F));
     CHECK(Near(HeadMath::ShapeAngle(-100.0F, 0.0F, 85.0F), -85.0F));
+    CHECK(Near(HeadMath::ShapeAngle(100.0F, 0.0F, -20.0F, 0.0F, 90.0F), 90.0F));
+    CHECK(Near(HeadMath::ShapeAngle(-100.0F, 0.0F, -20.0F, 0.0F, 90.0F), -20.0F));
+    CHECK(Near(HeadMath::ShapeAngle(0.5F, 1.0F, -20.0F, 10.0F, 90.0F), 10.0F));
+    CHECK(Near(HeadMath::ShapeAngle(11.0F, 1.0F, -20.0F, 10.0F, 90.0F), 20.0F));
     CHECK(Near(HeadMath::Smooth(5.0F, 10.0F, 0.0F, 1.0F / 60.0F), 10.0F));
 
     const auto identity = HeadMath::FromDegrees(0.0F, 0.0F, 0.0F);

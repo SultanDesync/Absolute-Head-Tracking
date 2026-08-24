@@ -12,10 +12,16 @@ struct Quaternion {
     float z = 0.0F;
 };
 
-inline float ShapeAngle(float degrees, float deadzone, float maximum) noexcept {
+inline float ShapeAngle(float degrees, float deadzone, float minimum,
+                        float center, float maximum) noexcept {
     const float magnitude = std::abs(degrees);
-    if (magnitude <= deadzone) return 0.0F;
-    return std::copysign(std::min(magnitude - deadzone, maximum), degrees);
+    const float shaped = magnitude <= deadzone
+        ? 0.0F : std::copysign(magnitude - deadzone, degrees);
+    return std::clamp(center + shaped, minimum, maximum);
+}
+
+inline float ShapeAngle(float degrees, float deadzone, float maximum) noexcept {
+    return ShapeAngle(degrees, deadzone, -maximum, 0.0F, maximum);
 }
 
 inline float Smooth(float current, float target, float smoothing, float dt) noexcept {

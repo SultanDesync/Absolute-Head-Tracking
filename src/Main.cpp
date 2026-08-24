@@ -1,5 +1,6 @@
 #include "PCH.h"
 
+#include "AimRestriction.h"
 #include "CameraHook.h"
 #include "Config.h"
 #include "ControlPanelDiscovery.h"
@@ -51,6 +52,15 @@ void SelectFallbackUiOwnership() {
 void InitializeRuntime() {
     if (g_runtimeInitialized.exchange(true, std::memory_order_acq_rel)) return;
 
+    if (!AimRestriction::Install()) {
+        RuntimePaths::Log(
+            "[Main]",
+            "The atomic aim-restriction hook set is unavailable. Camera tracking remains "
+            "fail-closed and native gunnery is untouched.",
+            true);
+        return;
+    }
+
     bool cameraReady = false;
     if (AbsoluteHOTASPresent()) {
         const auto result = HotasCameraCompatibility::Connect();
@@ -61,6 +71,7 @@ void InitializeRuntime() {
                 "AbsoluteHOTAS is present but its camera-ownership ABI is unavailable. "
                 "Absolute Head Tracking remains fail-closed and installs no gameplay hooks.",
                 true);
+            AimRestriction::Shutdown();
             return;
         }
         const auto busResult = InputBusClient::Connect();
@@ -93,6 +104,7 @@ void InitializeRuntime() {
     }
 
     if (!cameraReady) {
+        AimRestriction::Shutdown();
         RuntimePaths::Log(
             "[Main]",
             "Native camera seams did not pass their exact runtime gates. Tracking is "

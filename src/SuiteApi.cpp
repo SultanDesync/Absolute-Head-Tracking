@@ -34,13 +34,17 @@ AxisConfigurationV1 ToApi(const AxisSettings& value) {
     output.enabled = static_cast<std::uint8_t>(value.enabled);
     output.inverted = static_cast<std::uint8_t>(value.inverted);
     output.sensitivity = value.sensitivity;
-    output.maximumDegrees = value.maximumDegrees;
+    // ABI v1 exposes only a symmetric magnitude. Project an asymmetric range
+    // conservatively for older suite clients without changing the record size.
+    output.maximumDegrees = std::max(
+        std::abs(value.minimumDegrees), std::abs(value.maximumDegrees));
     return output;
 }
 
 AxisSettings FromApi(const AxisConfigurationV1& value) {
+    const float maximum = std::abs(value.maximumDegrees);
     return {value.enabled != 0, value.inverted != 0, value.sensitivity,
-            value.maximumDegrees};
+            -maximum, 0.0F, maximum};
 }
 
 ConnectionState ToApi(OpenTrack::ConnectionState value) {

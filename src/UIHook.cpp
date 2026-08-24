@@ -61,6 +61,8 @@ CreateSwapChainForHwndFn g_origCreateSwapChainForHwnd = nullptr;
 void* g_presentTarget = nullptr;
 void* g_present1Target = nullptr;
 void* g_resizeBuffersTarget = nullptr;
+void* g_executeCommandListsTarget = nullptr;
+void* g_createSwapChainTarget = nullptr;
 
 thread_local bool g_inOverlaySubmit = false;
 
@@ -136,6 +138,37 @@ static bool CreateCooperativeHook(
     return true;
 }
 
+static void RemoveOwnedHooks() {
+    void** targets[] = {
+        &g_presentTarget,
+        &g_present1Target,
+        &g_resizeBuffersTarget,
+        &g_executeCommandListsTarget,
+        &g_createSwapChainTarget,
+    };
+    for (void** target : targets) {
+        if (!*target) continue;
+        MH_DisableHook(*target);
+        MH_RemoveHook(*target);
+        *target = nullptr;
+    }
+
+    g_origPresent = nullptr;
+    g_origPresent1 = nullptr;
+    g_origResizeBuffers = nullptr;
+    g_origExecuteCommandLists = nullptr;
+    g_origCreateSwapChainForHwnd = nullptr;
+}
+
+static bool EnableOwnedHook(const char* label, void* target) {
+    if (!target) return true;
+    const MH_STATUS status = MH_EnableHook(target);
+    if (status == MH_OK || status == MH_ERROR_ENABLED) return true;
+    UILog(std::format("ERROR: Failed to enable {} hook (MinHook status {}).",
+        label, static_cast<int>(status)));
+    return false;
+}
+
 
 bool Install() {
     g_available.store(false, std::memory_order_relaxed);
@@ -198,8 +231,10 @@ bool Install() {
     void* createSwapChainHookTarget = SelectCooperativeHookTarget(
         "CreateSwapChainForHwnd", pCreateSwapChainForHwnd);
 
-    if (MH_Initialize() != MH_OK) {
-        UILog("ERROR: MH_Initialize failed.");
+    const MH_STATUS initializeStatus = MH_Initialize();
+    if (initializeStatus != MH_OK && initializeStatus != MH_ERROR_ALREADY_INITIALIZED) {
+        UILog(std::format("ERROR: MH_Initialize failed (MinHook status {}).",
+            static_cast<int>(initializeStatus)));
         return false;
     }
 
@@ -208,15 +243,15 @@ bool Install() {
     if (!CreateCooperativeHook(
         "CreateSwapChainForHwnd", pCreateSwapChainForHwnd, createSwapChainHookTarget,
         reinterpret_cast<void*>(&HookedCreateSwapChainForHwnd),
-        reinterpret_cast<void**>(&g_origCreateSwapChainForHwnd), nullptr)) {
-        MH_Uninitialize();
+        reinterpret_cast<void**>(&g_origCreateSwapChainForHwnd), &g_createSwapChainTarget)) {
+        RemoveOwnedHooks();
         return false;
     }
 
     if (!CreateCooperativeHook(
         "Present", pPresent, presentHookTarget, reinterpret_cast<void*>(&HookedPresent),
         reinterpret_cast<void**>(&g_origPresent), &g_presentTarget)) {
-        MH_Uninitialize();
+        RemoveOwnedHooks();
         return false;
     }
 
@@ -233,7 +268,7 @@ bool Install() {
         "ResizeBuffers", pResizeBuffers, resizeBuffersHookTarget,
         reinterpret_cast<void*>(&HookedResizeBuffers),
         reinterpret_cast<void**>(&g_origResizeBuffers), &g_resizeBuffersTarget)) {
-        MH_Uninitialize();
+        RemoveOwnedHooks();
         return false;
     }
 
@@ -241,14 +276,17 @@ bool Install() {
     if (!CreateCooperativeHook(
         "ExecuteCommandLists", pExecuteCommandLists, executeCommandListsHookTarget,
         reinterpret_cast<void*>(&HookedExecuteCommandLists),
-        reinterpret_cast<void**>(&g_origExecuteCommandLists), nullptr)) {
-        MH_Uninitialize();
+        reinterpret_cast<void**>(&g_origExecuteCommandLists), &g_executeCommandListsTarget)) {
+        RemoveOwnedHooks();
         return false;
     }
 
-    if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) {
-        UILog("ERROR: Failed to enable hooks.");
-        MH_Uninitialize();
+    if (!EnableOwnedHook("CreateSwapChainForHwnd", g_createSwapChainTarget)
+        || !EnableOwnedHook("Present", g_presentTarget)
+        || !EnableOwnedHook("Present1", g_present1Target)
+        || !EnableOwnedHook("ResizeBuffers", g_resizeBuffersTarget)
+        || !EnableOwnedHook("ExecuteCommandLists", g_executeCommandListsTarget)) {
+        RemoveOwnedHooks();
         return false;
     }
 
@@ -262,8 +300,9 @@ void Shutdown() {
     if (g_isOpen.exchange(false) && g_initialized.load(std::memory_order_acquire)) {
         RestoreGameCursorState();
     }
-    MH_DisableHook(MH_ALL_HOOKS);
-    MH_Uninitialize();
+    // MinHook is shared with the gameplay hooks. Remove only the hooks owned by
+    // the overlay and leave the process-global MinHook runtime initialized.
+    RemoveOwnedHooks();
 
     if (g_initialized.load()) {
         WaitForGpu();

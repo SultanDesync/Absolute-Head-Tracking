@@ -1,5 +1,6 @@
 #include "AbsoluteControlPanelAPI.h"
 #include "ControlPanelDiscovery.h"
+#include "LiveComponentsExperimentalAPI.h"
 
 #include <cassert>
 #include <cstring>
@@ -22,6 +23,24 @@ int main() {
     assert((kCapabilityProviderBindingCapture &
         kCapabilityLabeledChoices) == 0);
     assert(std::strcmp(kModuleId.data(), "absolute.control_panel") == 0);
+
+    namespace Live = AbsoluteControlPanelExperimental;
+    static_assert(static_cast<std::uint32_t>(Live::ComponentKind::HeadPose) == 4);
+    static_assert(Live::kLiveChannelDescriptorV1RadialResponseSize ==
+        offsetof(Live::LiveChannelDescriptorV1, headPose));
+    static_assert(Live::kLiveFrameV1RadialResponseSize ==
+        offsetof(Live::LiveFrameV1, headPose));
+    Live::LiveChannelDescriptorV1 pose;
+    pose.kind = Live::ComponentKind::HeadPose;
+    pose.headPose.axisCount = 3;
+    pose.headPose.axes[0].view = Live::HeadPoseView::Profile;
+    strcpy_s(pose.headPose.recenterControlId, "recenter-now");
+    strcpy_s(pose.headPose.deadzoneControlId, "deadzone");
+    assert(std::strcmp(pose.headPose.recenterControlId,
+        "recenter-now") == 0);
+    assert(std::strcmp(pose.headPose.deadzoneControlId,
+        "deadzone") == 0);
+    assert((Live::kLiveCapabilities & Live::kLiveCapabilityHeadPose) != 0);
 
     using namespace ControlPanelSubscriber::Discovery;
     assert(std::ranges::find(kHostModuleNames,
