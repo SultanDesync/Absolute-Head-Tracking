@@ -1,6 +1,7 @@
 #include "PCH.h"
 
 #include "ControlPanelSubscriber.h"
+#include "AbsoluteControlSubscriberKit.h"
 
 #include "BindingCodec.h"
 #include "Config.h"
@@ -14,6 +15,8 @@ namespace {
 using namespace AbsoluteControlPanelApi;
 
 std::atomic<const ApiV1*> g_hostApi{};
+std::mutex g_registrationMutex;
+bool g_terminalRejection{}; // Guarded by g_registrationMutex.
 std::atomic<const AbsoluteControlPanelExperimental::ExperimentalApiV1*>
     g_liveHostApi{};
 std::atomic<std::uint64_t> g_headPoseSequence{};
@@ -210,7 +213,7 @@ bool RegisterHeadPoseChannel(HMODULE module) noexcept {
         }
         const auto descriptor = HeadPoseChannel();
         const auto result = api->registerLiveChannel(&descriptor);
-        if (result != Live::Result::Ok && result != Live::Result::Duplicate)
+        if (result != Live::Result::Ok)
             return false;
         g_liveHostApi.store(api, std::memory_order_release);
         return true;
@@ -688,11 +691,7 @@ const std::array g_pages{
 static_assert(std::tuple_size_v<decltype(g_pages)> == 3);
 
 bool Valid(const ApiV1* api) noexcept {
-    constexpr auto required = offsetof(ApiV1, registerModule) + sizeof(api->registerModule);
-    return api && api->structSize >= required && api->abiVersion == kAbiVersion &&
-        api->moduleId && std::string_view(api->moduleId) == kModuleId &&
-        api->registerPage && api->unregisterModule && api->requestRefresh &&
-        api->registerModule;
+    return AbsoluteControlSubscriberKit::ValidHostApi(api);
 }
 } // namespace
 
@@ -700,6 +699,9 @@ namespace ControlPanelSubscriber {
 AbsoluteControlPanelApi::Result RegisterDiscoveredHost() noexcept {
     using AbsoluteControlPanelApi::Result;
     try {
+        std::scoped_lock registrationLock(g_registrationMutex);
+        if (g_hostApi.load(std::memory_order_acquire)) return Result::Ok;
+        if (g_terminalRejection) return Result::Rejected;
         for (const auto moduleName : ControlPanelSubscriber::Discovery::kHostModuleNames) {
             const auto module = GetModuleHandleW(moduleName.data());
             if (!module) continue;
@@ -707,18 +709,10 @@ AbsoluteControlPanelApi::Result RegisterDiscoveredHost() noexcept {
             if (!address) return Result::NotFound;
             const auto query = reinterpret_cast<AbsoluteControlPanelQueryApi>(address);
             const auto* api = query(AbsoluteControlPanelApi::kAbiVersion);
-            if (!Valid(api)) return Result::Rejected;
-            const auto moduleResult = api->registerModule(&g_module);
-            if (moduleResult != Result::Ok && moduleResult != Result::Duplicate)
-                return moduleResult;
-            for (const auto& page : g_pages) {
-                const auto result = api->registerPage(&page);
-                if (result != Result::Ok && result != Result::Duplicate) return result;
+            if (!Valid(api)) {
+                g_terminalRejection = true;
+                return Result::Rejected;
             }
-            // The native Axes instrument is independent of the optional
-            // bindings page. Commit it first so a future provider-capture or
-            // binding-descriptor incompatibility cannot suppress live pose UI.
-            const bool headPoseHosted = RegisterHeadPoseChannel(module);
             const bool providerCapture = api->structSize >=
                     offsetof(ApiV1, capabilities) + sizeof(api->capabilities) &&
                 (api->capabilities & kCapabilityProviderBindingCapture) != 0;
@@ -737,20 +731,22 @@ AbsoluteControlPanelApi::Result RegisterDiscoveredHost() noexcept {
                 bindings.pollBindingCapture = &PollBindingCapture;
                 bindings.cancelBindingCapture = &CancelBindingCapture;
             }
-            const auto bindingResult = api->registerPage(&bindings);
-            if (bindingResult != Result::Ok &&
-                bindingResult != Result::Duplicate) {
-                RuntimePaths::Log("[ControlPanel]", std::format(
-                    "Bindings page registration failed with result {}; core pages and live Axes remain hosted.",
-                    static_cast<std::uint32_t>(bindingResult)), true);
+            const std::array pages{ g_pages[0], g_pages[1], g_pages[2], bindings };
+            const auto registration = AbsoluteControlSubscriberKit::RegisterModulePagesDetailed(
+                api, g_module, pages);
+            if (registration.result != Result::Ok) {
+                if (registration.PartialRegistrationMayRemain() ||
+                    registration.result != Result::NotReady) {
+                    g_terminalRejection = true;
+                    return Result::Rejected;
+                }
+                return Result::NotReady;
             }
+            // Optional live presentation is registered only after all pages.
+            const bool headPoseHosted = RegisterHeadPoseChannel(module);
             g_hostApi.store(api, std::memory_order_release);
             RuntimePaths::Log("[ControlPanel]",
-                bindingResult != Result::Ok && bindingResult != Result::Duplicate
-                    ? (headPoseHosted
-                        ? "Registered core pages and the native Head Pose surface; Bindings page is unavailable."
-                        : "Registered core pages; Bindings and Head Pose surfaces are unavailable.")
-                    : headPoseHosted
+                headPoseHosted
                     ? "Registered four pages and the native Head Pose calibration surface."
                     : (providerCapture
                         ? "Registered four pages with flight-control capture; Head Pose live rendering is unavailable on this host."
